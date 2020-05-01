@@ -214,6 +214,10 @@ pub enum Error {
         expected: u64,
         backtrace: Backtrace,
     },
+
+    // TODO eliminate this
+    #[snafu(display("something bad happened",))]
+    TODO { backtrace: Backtrace },
 }
 
 // used in `std::io::Read` implementations

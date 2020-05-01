@@ -35,10 +35,11 @@ pub use crate::transport::{FilesystemTransport, Transport};
 use crate::datastore::Datastore;
 use crate::error::Result;
 use crate::fetch::{fetch_max_size, fetch_sha256};
-use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Timestamp};
+use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp};
 use chrono::{DateTime, Utc};
 use snafu::{ensure, OptionExt, ResultExt};
 use std::borrow::Cow;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::path::Path;
 use url::Url;
@@ -266,31 +267,93 @@ impl<'a, T: Transport> Repository<'a, T> {
         //   HASH is one of the hashes of the targets file listed in the targets metadata file
         //   found earlier in step 4. In either case, the client MUST write the file to
         //   non-volatile storage as FILENAME.EXT.
-        let targets = &self.targets.signed.targets;
-        Ok(if let Some(target) = targets.get(name) {
-            let sha256 = &target.hashes.sha256.clone().into_vec();
-            let file = if self.consistent_snapshot {
-                format!("{}.{}", hex::encode(sha256), name)
-            } else {
-                name.to_owned()
-            };
-
-            Some(fetch_sha256(
-                self.transport,
-                self.targets_base_url.join(&file).context(error::JoinUrl {
-                    path: file,
-                    url: self.targets_base_url.to_owned(),
-                })?,
-                target.length,
-                "targets.json",
-                sha256,
-            )?)
+        Ok(if let Some(target) = self.find_signed_target(name) {
+            let (sha256, file) = self.target_digest_and_filename(target, name);
+            Some(self.fetch_target(target, sha256, file.as_str())?)
         } else {
             None
         })
     }
+
+    fn find_signed_target(&self, name: &str) -> Option<&Target> {
+        let targets = &self.targets.signed.targets;
+        targets.get(name)
+    }
+
+    fn target_digest_and_filename(&self, target: &Target, name: &str) -> (&Vec<u8>, String) {
+        let sha256 = &target.hashes.sha256.clone().into_vec();
+        if self.consistent_snapshot {
+            (sha256, format!("{}.{}", hex::encode(sha256), name))
+        } else {
+            (sha256, name.to_owned())
+        }
+    }
+
+    fn fetch_target(&self, target: &Target, digest: &Vec<u8>, filename: &str) -> Result<impl Read> {
+        fetch_sha256(
+            self.transport,
+            self.targets_base_url
+                .join(&filename)
+                .context(error::JoinUrl {
+                    path: filename,
+                    url: self.targets_base_url.to_owned(),
+                })?,
+            target.length,
+            "targets.json",
+            digest,
+        )
+    }
+
+    /// Copy an entire or partial repository to disk, including all required metadata.
+    fn copy<P1, P2>(
+        &self,
+        new_metadata_path: P1,
+        new_targets_path: P2,
+        targets_subset: Option<&Vec<String>>,
+        include_all_root_jsons: bool,
+    ) -> Result<()>
+    where
+        P1: AsRef<Path>,
+        P2: AsRef<Path>,
+    {
+        if let Some(target_list) = targets_subset {
+            for target_name in target_list.iter() {
+                self.copy_target(&new_targets_path, target_name)?;
+            }
+        } else {
+            let targets = &self.targets.signed.targets;
+            for target_name in targets.keys() {
+                self.copy_target(&new_targets_path, target_name)?;
+            }
+        }
+
+        // TODO copy metadata
+        // TODO save all root jsons if include_all_root_jsons is true
+
+        Ok(())
+    }
+
+    fn copy_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {
+        let t = self.find_signed_target(name).context(error::TODO)?;
+        let (sha, filename) = self.target_digest_and_filename(&t, name);
+        let mut reader = self.fetch_target(t, sha, filename.as_str())?;
+        // .context(error::TODO)?;
+        let path = dest_dir.as_ref().join(filename);
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&path)
+            .context(error::TODO)?;
+        let _ = std::io::copy(&mut reader, &mut f).context(error::TODO)?;
+        Ok(())
+    }
 }
 
+// pub(crate) fn create_tarball<P1, P2>(indir: P1, outfile: P2) -> Result<()>
+//     where
+//         P1: AsRef<Path>,
+//         P2: AsRef<Path>,
+// {
 /// Ensures that system time has not stepped backward since it was last sampled
 fn system_time(datastore: &Datastore<'_>) -> Result<DateTime<Utc>> {
     let file = "latest_known_time.json";
