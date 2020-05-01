@@ -218,6 +218,13 @@ pub enum Error {
     // TODO eliminate this
     #[snafu(display("something bad happened",))]
     TODO { backtrace: Backtrace },
+
+    // TODO eliminate this
+    #[snafu(display("something bad happened",))]
+    TODOIo {
+        backtrace: Backtrace,
+        source: std::io::Error,
+    },
 }
 
 // used in `std::io::Read` implementations

@@ -269,7 +269,7 @@ impl<'a, T: Transport> Repository<'a, T> {
         //   non-volatile storage as FILENAME.EXT.
         Ok(if let Some(target) = self.find_signed_target(name) {
             let (sha256, file) = self.target_digest_and_filename(target, name);
-            Some(self.fetch_target(target, sha256, file.as_str())?)
+            Some(self.fetch_target(target, &sha256, file.as_str())?)
         } else {
             None
         })
@@ -280,12 +280,12 @@ impl<'a, T: Transport> Repository<'a, T> {
         targets.get(name)
     }
 
-    fn target_digest_and_filename(&self, target: &Target, name: &str) -> (&Vec<u8>, String) {
+    fn target_digest_and_filename(&self, target: &Target, name: &str) -> (Vec<u8>, String) {
         let sha256 = &target.hashes.sha256.clone().into_vec();
         if self.consistent_snapshot {
-            (sha256, format!("{}.{}", hex::encode(sha256), name))
+            (sha256.clone(), format!("{}.{}", hex::encode(sha256), name))
         } else {
-            (sha256, name.to_owned())
+            (sha256.clone(), name.to_owned())
         }
     }
 
@@ -305,7 +305,7 @@ impl<'a, T: Transport> Repository<'a, T> {
     }
 
     /// Copy an entire or partial repository to disk, including all required metadata.
-    fn copy<P1, P2>(
+    pub fn copy_repo<P1, P2>(
         &self,
         new_metadata_path: P1,
         new_targets_path: P2,
@@ -336,24 +336,19 @@ impl<'a, T: Transport> Repository<'a, T> {
     fn copy_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {
         let t = self.find_signed_target(name).context(error::TODO)?;
         let (sha, filename) = self.target_digest_and_filename(&t, name);
-        let mut reader = self.fetch_target(t, sha, filename.as_str())?;
+        let mut reader = self.fetch_target(t, &sha, filename.as_str())?;
         // .context(error::TODO)?;
         let path = dest_dir.as_ref().join(filename);
         let mut f = OpenOptions::new()
             .write(true)
             .create(true)
             .open(&path)
-            .context(error::TODO)?;
-        let _ = std::io::copy(&mut reader, &mut f).context(error::TODO)?;
+            .context(error::TODOIo)?;
+        let _ = std::io::copy(&mut reader, &mut f).context(error::TODOIo)?;
         Ok(())
     }
 }
 
-// pub(crate) fn create_tarball<P1, P2>(indir: P1, outfile: P2) -> Result<()>
-//     where
-//         P1: AsRef<Path>,
-//         P2: AsRef<Path>,
-// {
 /// Ensures that system time has not stepped backward since it was last sampled
 fn system_time(datastore: &Datastore<'_>) -> Result<DateTime<Utc>> {
     let file = "latest_known_time.json";
