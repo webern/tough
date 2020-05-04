@@ -38,6 +38,9 @@ use crate::fetch::{fetch_max_size, fetch_sha256};
 use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp, TimestampMeta};
 use chrono::{DateTime, Utc};
 // use snafu::futures01::FutureExt;
+use crate::error::Error::TODOSerde;
+use olpc_cjson::CanonicalFormatter;
+use serde::Serialize;
 use snafu::{ensure, OptionExt, ResultExt};
 use std::borrow::Cow;
 use std::fs::OpenOptions;
@@ -336,62 +339,57 @@ impl<'a, T: Transport> Repository<'a, T> {
             }
         }
 
-        let mut buf = serde_json::to_vec_pretty(&self.snapshot).context(error::TODOSerde)?;
-        buf.push(b'\n');
-        let path = metadata_outdir
-            .as_ref()
-            .join(if self.root.signed.consistent_snapshot {
-                format!("{}.snapshot.json", self.snapshot.signed.version)
-            } else {
-                "snapshot.json".to_owned()
-            });
-        std::fs::write(&path, &buf).context(error::TODOIo)?;
+        let filename = if self.root.signed.consistent_snapshot {
+            format!("{}.snapshot.json", self.snapshot.signed.version)
+        } else {
+            "snapshot.json".to_owned()
+        };
+        self.copy_file(filename.as_str(), &metadata_outdir)?;
 
-        let mut buf = serde_json::to_vec_pretty(&self.targets).context(error::TODOSerde)?;
-        buf.push(b'\n');
-        let path = metadata_outdir
-            .as_ref()
-            .join(if self.root.signed.consistent_snapshot {
-                format!("{}.targets.json", self.targets.signed.version)
-            } else {
-                "targets.json".to_owned()
-            });
-        std::fs::write(&path, &buf).context(error::TODOIo)?;
+        let filename = if self.root.signed.consistent_snapshot {
+            format!("{}.targets.json", self.targets.signed.version)
+        } else {
+            "targets.json".to_owned()
+        };
+        self.copy_file(filename.as_str(), &metadata_outdir)?;
 
-        let mut buf = serde_json::to_vec_pretty(&self.timestamp).context(error::TODOSerde)?;
-        buf.push(b'\n');
-        let path = metadata_outdir
-            .as_ref()
-            .join(format!("{}.timestamp.json", self.timestamp.signed.version));
-        std::fs::write(&path, &buf).context(error::TODOIo)?;
+        let filename = if self.root.signed.consistent_snapshot {
+            format!("{}.timestamp.json", self.snapshot.signed.version)
+        } else {
+            "timestamp.json".to_owned()
+        };
+        self.copy_file(filename.as_str(), &metadata_outdir)?;
 
         // TODO save all root jsons if include_all_root_jsons is true
         if include_all_root_jsons {
             for ver in (1..self.root.signed.version.get() + 1).rev() {
                 let root_json_filename = format!("{}.root.json", ver);
-                let mut read = fetch_max_size(
-                    self.transport,
-                    self.metadata_base_url
-                        .join(&root_json_filename)
-                        .context(error::JoinUrl {
-                            path: root_json_filename.as_str(),
-                            url: self.metadata_base_url.to_owned(),
-                        })?,
-                    self.limits.max_root_size,
-                    "max_root_size argument",
-                )?;
-                let mut file =
-                    std::fs::File::create(metadata_outdir.as_ref().join(&root_json_filename))
-                        .context(error::TODOIo)?;
-                let mut root_file_data = Vec::new();
-                read.read_to_end(&mut root_file_data)
-                    .context(error::TODOIo)?;
-                file.write_all(&root_file_data).context(error::TODOIo)?;
+                self.copy_file(root_json_filename.as_str(), &metadata_outdir)?;
             }
         }
         let current_root_version = self.root.signed.version;
 
         Ok(())
+    }
+
+    fn copy_file<P: AsRef<Path>>(&self, filename: &str, outdir: P) -> Result<()> {
+        let mut read = fetch_max_size(
+            self.transport,
+            self.metadata_base_url
+                .join(filename)
+                .context(error::JoinUrl {
+                    path: filename,
+                    url: self.metadata_base_url.to_owned(),
+                })?,
+            self.limits.max_root_size,
+            "max_root_size argument",
+        )?;
+        let mut file =
+            std::fs::File::create(outdir.as_ref().join(&filename)).context(error::TODOIo)?;
+        let mut root_file_data = Vec::new();
+        read.read_to_end(&mut root_file_data)
+            .context(error::TODOIo)?;
+        file.write_all(&root_file_data).context(error::TODOIo)
     }
 
     fn copy_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {

@@ -46,4 +46,17 @@ fn test_repo_save() {
         true,
     )
     .unwrap();
+
+    // check that we can load the copied repo.
+    let copied_repo = Repository::load(
+        &tough::FilesystemTransport,
+        Settings {
+            root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
+            datastore: datastore.as_ref(),
+            metadata_base_url: "file:///Users/mjb/Desktop/metadata",
+            targets_base_url: "file:///Users/mjb/Desktop/targets",
+            limits: Limits::default(),
+        },
+    )
+    .unwrap();
 }
