@@ -304,8 +304,11 @@ impl<'a, T: Transport> Repository<'a, T> {
         )
     }
 
+    // TODO - what's the best name for this function. clone and copy are both bad choices due to rust usage.
     /// Copy an entire or partial repository to disk, including all required metadata.
-    pub fn copy_repo<P1, P2>(
+    /// The source repo can be anywhere (using Transport), but the copied repo will be local, using
+    /// paths to filesystem directories.
+    pub fn save<P1, P2>(
         &self,
         new_metadata_path: P1,
         new_targets_path: P2,
