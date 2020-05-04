@@ -225,6 +225,13 @@ pub enum Error {
         backtrace: Backtrace,
         source: std::io::Error,
     },
+
+    // TODO eliminate this
+    #[snafu(display("something bad happened",))]
+    TODOSerde {
+        backtrace: Backtrace,
+        source: serde_json::error::Error,
+    },
 }
 
 // used in `std::io::Read` implementations

@@ -35,7 +35,7 @@ pub use crate::transport::{FilesystemTransport, Transport};
 use crate::datastore::Datastore;
 use crate::error::Result;
 use crate::fetch::{fetch_max_size, fetch_sha256};
-use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp};
+use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp, TimestampMeta};
 use chrono::{DateTime, Utc};
 use snafu::{ensure, OptionExt, ResultExt};
 use std::borrow::Cow;
@@ -242,6 +242,7 @@ impl<'a, T: Transport> Repository<'a, T> {
     /// mismatch, the reader returns a [`std::io::Error`]. **Consumers of this library must not use
     /// data from the reader if it returns an error.**
     pub fn read_target(&self, name: &str) -> Result<Option<impl Read>> {
+        // TODO - create an unsafe version of this function that does not perform this check.
         // Check for repository metadata expiration.
         ensure!(
             system_time(&self.datastore)? < self.earliest_expiration,
@@ -310,7 +311,7 @@ impl<'a, T: Transport> Repository<'a, T> {
     /// paths to filesystem directories.
     pub fn save<P1, P2>(
         &self,
-        new_metadata_path: P1,
+        metadata_outdir: P1,
         new_targets_path: P2,
         targets_subset: Option<&Vec<String>>,
         include_all_root_jsons: bool,
@@ -331,7 +332,45 @@ impl<'a, T: Transport> Repository<'a, T> {
         }
 
         // TODO copy metadata
+        let mut buf = serde_json::to_vec_pretty(&self.snapshot).context(error::TODOSerde)?;
+        buf.push(b'\n');
+        let path = metadata_outdir
+            .as_ref()
+            .join(if self.root.signed.consistent_snapshot {
+                format!("{}.snapshot.json", self.snapshot.signed.version)
+            } else {
+                "snapshot.json".to_owned()
+            });
+        std::fs::write(&path, &buf).context(error::TODOIo)?;
+
+        let mut buf = serde_json::to_vec_pretty(&self.targets).context(error::TODOSerde)?;
+        buf.push(b'\n');
+        let path = metadata_outdir
+            .as_ref()
+            .join(if self.root.signed.consistent_snapshot {
+                format!("{}.targets.json", self.targets.signed.version)
+            } else {
+                "targets.json".to_owned()
+            });
+        std::fs::write(&path, &buf).context(error::TODOIo)?;
+
+        let mut buf = serde_json::to_vec_pretty(&self.timestamp).context(error::TODOSerde)?;
+        buf.push(b'\n');
+        let path = metadata_outdir
+            .as_ref()
+            .join(format!("{}.timestamp.json", self.timestamp.signed.version));
+        std::fs::write(&path, &buf).context(error::TODOIo)?;
+
         // TODO save all root jsons if include_all_root_jsons is true
+        if include_all_root_jsons {
+            for ver in self.root.signed.version as u64..1 {
+                // TODO
+                let the_bytes = fetch_root_version(ver).context(error::TODOIo)?;
+                let path = metadata_outdir.as_ref().join(format!("{}.root.json", ver));
+                std::fs::write(&path, &buf).context(error::TODOIo)?;
+            }
+        }
+        let current_root_version = self.root.signed.version;
 
         Ok(())
     }
@@ -623,6 +662,14 @@ fn load_timestamp<T: Transport>(
     datastore.create("timestamp.json", &timestamp)?;
 
     Ok(timestamp)
+}
+
+fn snapshot_filename(root: &Signed<Root>, snapshot_meta: &TimestampMeta) -> String {
+    if root.signed.consistent_snapshot {
+        format!("{}.snapshot.json", snapshot_meta.version)
+    } else {
+        "snapshot.json".to_owned()
+    }
 }
 
 /// Step 3 of the client application, which loads the snapshot metadata file.
