@@ -37,10 +37,11 @@ use crate::error::Result;
 use crate::fetch::{fetch_max_size, fetch_sha256};
 use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp, TimestampMeta};
 use chrono::{DateTime, Utc};
+// use snafu::futures01::FutureExt;
 use snafu::{ensure, OptionExt, ResultExt};
 use std::borrow::Cow;
 use std::fs::OpenOptions;
-use std::io::Read;
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use url::Url;
 
@@ -125,6 +126,8 @@ pub struct Repository<'a, T: Transport> {
     snapshot: Signed<Snapshot>,
     timestamp: Signed<Timestamp>,
     targets: Signed<crate::schema::Targets>,
+    limits: Limits,
+    metadata_base_url: Url,
     targets_base_url: Url,
 }
 
@@ -206,6 +209,8 @@ impl<'a, T: Transport> Repository<'a, T> {
             snapshot,
             timestamp,
             targets,
+            limits: settings.limits,
+            metadata_base_url,
             targets_base_url,
         })
     }
@@ -331,7 +336,6 @@ impl<'a, T: Transport> Repository<'a, T> {
             }
         }
 
-        // TODO copy metadata
         let mut buf = serde_json::to_vec_pretty(&self.snapshot).context(error::TODOSerde)?;
         buf.push(b'\n');
         let path = metadata_outdir
@@ -363,11 +367,26 @@ impl<'a, T: Transport> Repository<'a, T> {
 
         // TODO save all root jsons if include_all_root_jsons is true
         if include_all_root_jsons {
-            for ver in self.root.signed.version as u64..1 {
-                // TODO
-                let the_bytes = fetch_root_version(ver).context(error::TODOIo)?;
-                let path = metadata_outdir.as_ref().join(format!("{}.root.json", ver));
-                std::fs::write(&path, &buf).context(error::TODOIo)?;
+            for ver in (1..self.root.signed.version.get() + 1).rev() {
+                let root_json_filename = format!("{}.root.json", ver);
+                let mut read = fetch_max_size(
+                    self.transport,
+                    self.metadata_base_url
+                        .join(&root_json_filename)
+                        .context(error::JoinUrl {
+                            path: root_json_filename.as_str(),
+                            url: self.metadata_base_url.to_owned(),
+                        })?,
+                    self.limits.max_root_size,
+                    "max_root_size argument",
+                )?;
+                let mut file =
+                    std::fs::File::create(metadata_outdir.as_ref().join(&root_json_filename))
+                        .context(error::TODOIo)?;
+                let mut root_file_data = Vec::new();
+                read.read_to_end(&mut root_file_data)
+                    .context(error::TODOIo)?;
+                file.write_all(&root_file_data).context(error::TODOIo)?;
             }
         }
         let current_root_version = self.root.signed.version;
