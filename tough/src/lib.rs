@@ -289,9 +289,8 @@ impl<'a, T: Transport> Repository<'a, T> {
     /// * `targets_subset` is the list of targets to include in the cached repo. If no subset is
     /// specified (`None`), then *all* targets are included in the cache. To specify a cache with only
     /// metadata files and no target files, use `Some(Vec::new())`.
-    /// * `cache_root_chain` - If a cached repo is to be used offline, it may be necessary to save
-    /// all `root.json` files so that `tough` can roll forward from an older `root.json`. Specify
-    /// `true` to cache to `root.json` chain.
+    /// * `cache_root_chain` - It may be necessary to save all `root.json` files so that `tough` can
+    /// roll forward from an older `root.json`. Specify `true` to cache the `root.json` chain.
     pub fn cache<P1, P2>(
         &self,
         metadata_outdir: P1,
