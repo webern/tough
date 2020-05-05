@@ -286,10 +286,8 @@ impl<'a, T: Transport> Repository<'a, T> {
     /// * `metadata_outdir` is the directory where cached metadata files will be saved.
     /// * `targets_outdir` is the directory where cached targets files will be saved.
     /// * `targets_subset` is the list of targets to include in the cached repo. If no subset is
-    /// specified (`None`), then *all* targets are included in the cache. To specify a cache with only
-    /// metadata files and no target files, use `Some(Vec::new())`.
-    /// * `cache_root_chain` - It may be necessary to save all `root.json` files so that `tough` can
-    /// roll forward from an older `root.json`. Specify `true` to cache the `root.json` chain.
+    /// specified (`None`), then *all* targets are included in the cache.
+    /// * `cache_root_chain` specifies whether or not we will cache all versions of `root.json`.
     pub fn cache<P1, P2>(
         &self,
         metadata_outdir: P1,
@@ -424,8 +422,7 @@ impl<'a, T: Transport> Repository<'a, T> {
             .create(true)
             .open(&path)
             .context(error::CacheTargetWrite { path: path.clone() })?;
-        let _ =
-            std::io::copy(&mut reader, &mut f).context(error::CacheTargetWrite { path: path })?;
+        let _ = std::io::copy(&mut reader, &mut f).context(error::CacheTargetWrite { path })?;
         Ok(())
     }
 }
