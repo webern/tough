@@ -246,7 +246,6 @@ impl<'a, T: Transport> Repository<'a, T> {
     /// mismatch, the reader returns a [`std::io::Error`]. **Consumers of this library must not use
     /// data from the reader if it returns an error.**
     pub fn read_target(&self, name: &str) -> Result<Option<impl Read>> {
-        // TODO - create an unsafe version of this function that does not perform this check.
         // Check for repository metadata expiration.
         ensure!(
             system_time(&self.datastore)? < self.earliest_expiration,
