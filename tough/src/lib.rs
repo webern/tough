@@ -272,7 +272,7 @@ impl<'a, T: Transport> Repository<'a, T> {
         //   HASH is one of the hashes of the targets file listed in the targets metadata file
         //   found earlier in step 4. In either case, the client MUST write the file to
         //   non-volatile storage as FILENAME.EXT.
-        Ok(if let Some(target) = self.find_signed_target(name) {
+        Ok(if let Some(target) = self.find_target(name) {
             let (sha256, file) = self.target_digest_and_filename(target, name);
             Some(self.fetch_target(target, &sha256, file.as_str())?)
         } else {
@@ -280,7 +280,81 @@ impl<'a, T: Transport> Repository<'a, T> {
         })
     }
 
-    fn find_signed_target(&self, name: &str) -> Option<&Target> {
+    /// Cache an entire or partial repository to disk, including all required metadata.
+    /// The source repo can be anywhere (using Transport), but the copied repo will be local, using
+    /// paths to filesystem directories.
+    ///
+    /// * `metadata_outdir` is the directory where cached metadata files will be saved.
+    /// * `targets_outdir` is the directory where cached targets files will be saved.
+    /// * `targets_subset` is the list of targets to include in the cached repo. If no subset is
+    /// specified (`None`), then *all* targets are included in the cache. To specify a cache with only
+    /// metadata files and no target files, use `Some(Vec::new())`.
+    /// * `cache_root_chain` - If a cached repo is to be used offline, it may be necessary to save
+    /// all `root.json` files so that `tough` can roll forward from an older `root.json`. Specify
+    /// `true` to cache to `root.json` chain.
+    pub fn cache<P1, P2>(
+        &self,
+        metadata_outdir: P1,
+        targets_outdir: P2,
+        targets_subset: Option<&Vec<String>>,
+        cache_root_chain: bool,
+    ) -> Result<()>
+    where
+        P1: AsRef<Path>,
+        P2: AsRef<Path>,
+    {
+        std::fs::create_dir_all(metadata_outdir.as_ref()).context(error::TODOIo)?;
+        std::fs::create_dir_all(targets_outdir.as_ref()).context(error::TODOIo)?;
+        if let Some(target_list) = targets_subset {
+            for target_name in target_list.iter() {
+                self.cache_target(&targets_outdir, target_name)?;
+            }
+        } else {
+            let targets = &self.targets.signed.targets;
+            for target_name in targets.keys() {
+                self.cache_target(&targets_outdir, target_name)?;
+            }
+        }
+
+        self.cache_file_from_transport(self.snapshot_filename().as_str(), &metadata_outdir)?;
+        self.cache_file_from_transport(self.targets_filename().as_str(), &metadata_outdir)?;
+        self.cache_file_from_transport(self.timestamp_filename().as_str(), &metadata_outdir)?;
+
+        if cache_root_chain {
+            for ver in (1..=self.root.signed.version.get()).rev() {
+                let root_json_filename = format!("{}.root.json", ver);
+                self.cache_file_from_transport(root_json_filename.as_str(), &metadata_outdir)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn snapshot_filename(&self) -> String {
+        if self.root.signed.consistent_snapshot {
+            format!("{}.snapshot.json", self.snapshot.signed.version)
+        } else {
+            "snapshot.json".to_owned()
+        }
+    }
+
+    fn targets_filename(&self) -> String {
+        if self.root.signed.consistent_snapshot {
+            format!("{}.targets.json", self.targets.signed.version)
+        } else {
+            "targets.json".to_owned()
+        }
+    }
+
+    fn timestamp_filename(&self) -> String {
+        if self.root.signed.consistent_snapshot {
+            format!("{}.timestamp.json", self.snapshot.signed.version)
+        } else {
+            "timestamp.json".to_owned()
+        }
+    }
+
+    fn find_target(&self, name: &str) -> Option<&Target> {
         let targets = &self.targets.signed.targets;
         targets.get(name)
     }
@@ -309,66 +383,7 @@ impl<'a, T: Transport> Repository<'a, T> {
         )
     }
 
-    // TODO - what's the best name for this function. clone and copy are both bad choices due to rust usage.
-    /// Copy an entire or partial repository to disk, including all required metadata.
-    /// The source repo can be anywhere (using Transport), but the copied repo will be local, using
-    /// paths to filesystem directories.
-    pub fn save<P1, P2>(
-        &self,
-        metadata_outdir: P1,
-        targets_outdir: P2,
-        targets_subset: Option<&Vec<String>>,
-        include_all_root_jsons: bool,
-    ) -> Result<()>
-    where
-        P1: AsRef<Path>,
-        P2: AsRef<Path>,
-    {
-        std::fs::create_dir_all(metadata_outdir.as_ref()).context(error::TODOIo)?;
-        std::fs::create_dir_all(targets_outdir.as_ref()).context(error::TODOIo)?;
-        if let Some(target_list) = targets_subset {
-            for target_name in target_list.iter() {
-                self.copy_target(&targets_outdir, target_name)?;
-            }
-        } else {
-            let targets = &self.targets.signed.targets;
-            for target_name in targets.keys() {
-                self.copy_target(&targets_outdir, target_name)?;
-            }
-        }
-
-        let filename = if self.root.signed.consistent_snapshot {
-            format!("{}.snapshot.json", self.snapshot.signed.version)
-        } else {
-            "snapshot.json".to_owned()
-        };
-        self.copy_file(filename.as_str(), &metadata_outdir)?;
-
-        let filename = if self.root.signed.consistent_snapshot {
-            format!("{}.targets.json", self.targets.signed.version)
-        } else {
-            "targets.json".to_owned()
-        };
-        self.copy_file(filename.as_str(), &metadata_outdir)?;
-
-        let filename = if self.root.signed.consistent_snapshot {
-            format!("{}.timestamp.json", self.snapshot.signed.version)
-        } else {
-            "timestamp.json".to_owned()
-        };
-        self.copy_file(filename.as_str(), &metadata_outdir)?;
-
-        if include_all_root_jsons {
-            for ver in (1..=self.root.signed.version.get()).rev() {
-                let root_json_filename = format!("{}.root.json", ver);
-                self.copy_file(root_json_filename.as_str(), &metadata_outdir)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn copy_file<P: AsRef<Path>>(&self, filename: &str, outdir: P) -> Result<()> {
+    fn cache_file_from_transport<P: AsRef<Path>>(&self, filename: &str, outdir: P) -> Result<()> {
         let mut read = fetch_max_size(
             self.transport,
             self.metadata_base_url
@@ -388,8 +403,8 @@ impl<'a, T: Transport> Repository<'a, T> {
         file.write_all(&root_file_data).context(error::TODOIo)
     }
 
-    fn copy_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {
-        let t = self.find_signed_target(name).context(error::TODO)?;
+    fn cache_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {
+        let t = self.find_target(name).context(error::TODO)?;
         let (sha, filename) = self.target_digest_and_filename(&t, name);
         let mut reader = self.fetch_target(t, &sha, filename.as_str())?;
         // .context(error::TODO)?;

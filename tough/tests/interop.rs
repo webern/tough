@@ -5,7 +5,6 @@ use std::fs::File;
 use tempfile::TempDir;
 use test_utils::{dir_url, test_data};
 use tough::{Limits, Repository, Settings};
-use url::Url;
 
 mod test_utils;
 

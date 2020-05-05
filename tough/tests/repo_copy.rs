@@ -58,7 +58,7 @@ fn test_repo_cache_all_targets() {
     let destination = TempDir::new().unwrap();
     let metadata_desintaion = destination.as_ref().join("metadata");
     let targets_desintaion = destination.as_ref().join("targets");
-    repo.save(&metadata_desintaion, &targets_desintaion, None, true)
+    repo.cache(&metadata_desintaion, &targets_desintaion, None, true)
         .unwrap();
 
     // check that we can load the copied repo.
@@ -110,7 +110,7 @@ fn test_repo_cache_list_of_two_targets() {
     let metadata_desintaion = destination.as_ref().join("metadata");
     let targets_desintaion = destination.as_ref().join("targets");
     let targets_subset = vec!["file1.txt".to_string(), "file2.txt".to_string()];
-    repo.save(
+    repo.cache(
         &metadata_desintaion,
         &targets_desintaion,
         Some(&targets_subset),
@@ -167,7 +167,7 @@ fn test_repo_cache_some() {
     let metadata_desintaion = destination.as_ref().join("metadata");
     let targets_desintaion = destination.as_ref().join("targets");
     let targets_subset = vec!["file2.txt".to_string()];
-    repo.save(
+    repo.cache(
         &metadata_desintaion,
         &targets_desintaion,
         Some(&targets_subset),
