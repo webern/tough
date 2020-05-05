@@ -3,13 +3,12 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tempfile::TempDir;
+use test_utils::{dir_url, test_data};
 use tough::{FilesystemTransport, Limits, Repository, Settings};
-use url::Url;
-use utl::{dir_url, test_data};
 
-mod utl;
+mod test_utils;
 
 struct RepoPaths {
     root_path: PathBuf,

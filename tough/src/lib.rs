@@ -35,16 +35,12 @@ pub use crate::transport::{FilesystemTransport, Transport};
 use crate::datastore::Datastore;
 use crate::error::Result;
 use crate::fetch::{fetch_max_size, fetch_sha256};
-use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp, TimestampMeta};
+use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Target, Timestamp};
 use chrono::{DateTime, Utc};
-// use snafu::futures01::FutureExt;
-use crate::error::Error::TODOSerde;
-use olpc_cjson::CanonicalFormatter;
-use serde::Serialize;
 use snafu::{ensure, OptionExt, ResultExt};
 use std::borrow::Cow;
 use std::fs::OpenOptions;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{Read, Write};
 use std::path::Path;
 use url::Url;
 
@@ -298,7 +294,7 @@ impl<'a, T: Transport> Repository<'a, T> {
         }
     }
 
-    fn fetch_target(&self, target: &Target, digest: &Vec<u8>, filename: &str) -> Result<impl Read> {
+    fn fetch_target(&self, target: &Target, digest: &[u8], filename: &str) -> Result<impl Read> {
         fetch_sha256(
             self.transport,
             self.targets_base_url
@@ -362,14 +358,12 @@ impl<'a, T: Transport> Repository<'a, T> {
         };
         self.copy_file(filename.as_str(), &metadata_outdir)?;
 
-        // TODO save all root jsons if include_all_root_jsons is true
         if include_all_root_jsons {
-            for ver in (1..self.root.signed.version.get() + 1).rev() {
+            for ver in (1..=self.root.signed.version.get()).rev() {
                 let root_json_filename = format!("{}.root.json", ver);
                 self.copy_file(root_json_filename.as_str(), &metadata_outdir)?;
             }
         }
-        let current_root_version = self.root.signed.version;
 
         Ok(())
     }
@@ -681,14 +675,6 @@ fn load_timestamp<T: Transport>(
     datastore.create("timestamp.json", &timestamp)?;
 
     Ok(timestamp)
-}
-
-fn snapshot_filename(root: &Signed<Root>, snapshot_meta: &TimestampMeta) -> String {
-    if root.signed.consistent_snapshot {
-        format!("{}.snapshot.json", snapshot_meta.version)
-    } else {
-        "snapshot.json".to_owned()
-    }
 }
 
 /// Step 3 of the client application, which loads the snapshot metadata file.
