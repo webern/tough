@@ -320,7 +320,7 @@ impl<'a, T: Transport> Repository<'a, T> {
     pub fn save<P1, P2>(
         &self,
         metadata_outdir: P1,
-        new_targets_path: P2,
+        targets_outdir: P2,
         targets_subset: Option<&Vec<String>>,
         include_all_root_jsons: bool,
     ) -> Result<()>
@@ -328,14 +328,16 @@ impl<'a, T: Transport> Repository<'a, T> {
         P1: AsRef<Path>,
         P2: AsRef<Path>,
     {
+        std::fs::create_dir_all(metadata_outdir.as_ref()).context(error::TODOIo)?;
+        std::fs::create_dir_all(targets_outdir.as_ref()).context(error::TODOIo)?;
         if let Some(target_list) = targets_subset {
             for target_name in target_list.iter() {
-                self.copy_target(&new_targets_path, target_name)?;
+                self.copy_target(&targets_outdir, target_name)?;
             }
         } else {
             let targets = &self.targets.signed.targets;
             for target_name in targets.keys() {
-                self.copy_target(&new_targets_path, target_name)?;
+                self.copy_target(&targets_outdir, target_name)?;
             }
         }
 
