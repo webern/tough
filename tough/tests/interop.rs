@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fs::File;
+use std::io::Read;
 use tempfile::TempDir;
 use test_utils::{dir_url, test_data};
 use tough::{Limits, Repository, Settings};
@@ -14,9 +15,11 @@ use tough::HttpTransport;
 #[cfg(feature = "http")]
 use mockito::mock;
 
-use std::io::Read;
 #[cfg(feature = "http")]
 use std::str::FromStr;
+
+#[cfg(feature = "http")]
+use url::Url;
 
 /// Returns a vector of bytes from any object with the Read trait
 pub fn read_to_end<R: Read>(mut reader: R) -> Vec<u8> {

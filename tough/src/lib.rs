@@ -302,8 +302,12 @@ impl<'a, T: Transport> Repository<'a, T> {
         P1: AsRef<Path>,
         P2: AsRef<Path>,
     {
-        std::fs::create_dir_all(metadata_outdir.as_ref()).context(error::TODOIo)?;
-        std::fs::create_dir_all(targets_outdir.as_ref()).context(error::TODOIo)?;
+        std::fs::create_dir_all(metadata_outdir.as_ref()).context(error::CacheDirectoryCreate {
+            path: metadata_outdir.as_ref(),
+        })?;
+        std::fs::create_dir_all(targets_outdir.as_ref()).context(error::CacheDirectoryCreate {
+            path: targets_outdir.as_ref(),
+        })?;
         if let Some(target_list) = targets_subset {
             for target_name in target_list.iter() {
                 self.cache_target(&targets_outdir, target_name)?;
@@ -394,26 +398,35 @@ impl<'a, T: Transport> Repository<'a, T> {
             self.limits.max_root_size,
             "max_root_size argument",
         )?;
-        let mut file =
-            std::fs::File::create(outdir.as_ref().join(&filename)).context(error::TODOIo)?;
+        let outpath = outdir.as_ref().join(&filename);
+        let mut file = std::fs::File::create(&outpath).context(error::CacheFileWrite {
+            path: outpath.clone(),
+        })?;
         let mut root_file_data = Vec::new();
         read.read_to_end(&mut root_file_data)
-            .context(error::TODOIo)?;
-        file.write_all(&root_file_data).context(error::TODOIo)
+            .context(error::CacheFileRead {
+                url: self.metadata_base_url.to_owned(),
+            })?;
+        file.write_all(&root_file_data)
+            .context(error::CacheFileWrite {
+                path: outpath.clone(),
+            })
     }
 
     fn cache_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {
-        let t = self.find_target(name).context(error::TODO)?;
+        let t = self.find_target(name).context(error::CacheTargetMissing {
+            target_name: name.to_owned(),
+        })?;
         let (sha, filename) = self.target_digest_and_filename(&t, name);
         let mut reader = self.fetch_target(t, &sha, filename.as_str())?;
-        // .context(error::TODO)?;
         let path = dest_dir.as_ref().join(filename);
         let mut f = OpenOptions::new()
             .write(true)
             .create(true)
             .open(&path)
-            .context(error::TODOIo)?;
-        let _ = std::io::copy(&mut reader, &mut f).context(error::TODOIo)?;
+            .context(error::CacheTargetWrite { path: path.clone() })?;
+        let _ =
+            std::io::copy(&mut reader, &mut f).context(error::CacheTargetWrite { path: path })?;
         Ok(())
     }
 }

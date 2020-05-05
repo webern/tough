@@ -9,6 +9,7 @@ use crate::schema::RoleType;
 use chrono::{DateTime, Utc};
 use snafu::{Backtrace, Snafu};
 use std::path::PathBuf;
+use url::Url;
 
 /// Alias for `Result<T, Error>`.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -215,22 +216,38 @@ pub enum Error {
         backtrace: Backtrace,
     },
 
-    // TODO eliminate this
-    #[snafu(display("something bad happened",))]
-    TODO { backtrace: Backtrace },
-
-    // TODO eliminate this
-    #[snafu(display("something bad happened",))]
-    TODOIo {
-        backtrace: Backtrace,
+    #[snafu(display("Error reading data from {}: {}", url, source))]
+    CacheFileRead {
+        url: Url,
         source: std::io::Error,
+        backtrace: Backtrace,
     },
 
-    // TODO eliminate this
-    #[snafu(display("something bad happened",))]
-    TODOSerde {
+    #[snafu(display("Error writing data to {}: {}", path.display(), source))]
+    CacheFileWrite {
+        path: PathBuf,
+        source: std::io::Error,
         backtrace: Backtrace,
-        source: serde_json::error::Error,
+    },
+
+    #[snafu(display("Error creating the directory {}: {}", path.display(), source))]
+    CacheDirectoryCreate {
+        path: PathBuf,
+        source: std::io::Error,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Error writing target file to {}: {}", path.display(), source))]
+    CacheTargetWrite {
+        path: PathBuf,
+        source: std::io::Error,
+        backtrace: Backtrace,
+    },
+
+    #[snafu(display("Error the target {} was not found", target_name))]
+    CacheTargetMissing {
+        target_name: String,
+        backtrace: Backtrace,
     },
 }
 
