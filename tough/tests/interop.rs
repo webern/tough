@@ -21,7 +21,6 @@ use std::str::FromStr;
 #[cfg(feature = "http")]
 use url::Url;
 
-/// Returns a vector of bytes from any object with the Read trait
 pub fn read_to_end<R: Read>(mut reader: R) -> Vec<u8> {
     let mut v = Vec::new();
     reader.read_to_end(&mut v).unwrap();
