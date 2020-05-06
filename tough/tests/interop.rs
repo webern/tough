@@ -21,7 +21,7 @@ use std::str::FromStr;
 #[cfg(feature = "http")]
 use url::Url;
 
-pub fn read_to_end<R: Read>(mut reader: R) -> Vec<u8> {
+fn read_to_end<R: Read>(mut reader: R) -> Vec<u8> {
     let mut v = Vec::new();
     reader.read_to_end(&mut v).unwrap();
     v
