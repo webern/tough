@@ -135,7 +135,6 @@ fn test_repo_cache_list_of_two_targets() {
     .unwrap();
 
     // the copied repo should have file1 and file2 (i.e. all of the listed targets).
-
     let mut file_data = Vec::new();
     let file_size = copied_repo
         .read_target("file1.txt")
