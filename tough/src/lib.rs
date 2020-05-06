@@ -404,9 +404,7 @@ impl<'a, T: Transport> Repository<'a, T> {
                 url: self.metadata_base_url.to_owned(),
             })?;
         file.write_all(&root_file_data)
-            .context(error::CacheFileWrite {
-                path: outpath.clone(),
-            })
+            .context(error::CacheFileWrite { path: outpath })
     }
 
     fn cache_target<P: AsRef<Path>>(&self, dest_dir: P, name: &str) -> Result<()> {
