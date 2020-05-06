@@ -281,7 +281,6 @@ impl<'a, T: Transport> Repository<'a, T> {
 
     /// Cache an entire or partial repository to disk, including all required metadata.
     /// The cached repo will be local, using filesystem paths.
-    /// paths to filesystem directories.
     ///
     /// * `metadata_outdir` is the directory where cached metadata files will be saved.
     /// * `targets_outdir` is the directory where cached targets files will be saved.
