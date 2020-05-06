@@ -192,7 +192,6 @@ fn test_repo_cache_some() {
     .unwrap();
 
     // the copied repo should have file2 but not file1 (i.e. only the listed targets).
-
     let read_target_result = copied_repo.read_target("file1.txt");
     assert!(read_target_result.is_err());
 
