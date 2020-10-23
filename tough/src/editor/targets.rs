@@ -121,7 +121,7 @@ impl<'a, T: Transport> TargetsEditor<'a, T> {
     /// Creates a `TargetsEditor` with the provided targets from an already loaded repo
     /// `version` and `expires` are thrown out to encourage updating the version and expiration
     /// If a `Repository` has been loaded, use `from_repo()` to preserve the `Transport` and `Limits`.
-    pub fn from_repo(repo: &Repository<'a, T>, name: &str) -> Result<Self>
+    pub fn from_repo(repo: &Repository, name: &str) -> Result<Self>
     where
         T: Transport,
     {

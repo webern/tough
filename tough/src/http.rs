@@ -4,8 +4,8 @@ use crate::{Transport, TransportError, TransportResult};
 use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
 use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
-use reqwest::{Error, Method};
-use snafu::ResultExt;
+use reqwest::Method;
+// use snafu::ResultExt;
 use std::cmp::Ordering;
 use std::io::Read;
 use std::time::Duration;
@@ -70,7 +70,7 @@ impl Transport for HttpTransport {
     /// returned `RetryRead` will also retry as necessary per the `ClientSettings`.
     fn fetch(&self, url: Url) -> TransportResult {
         let mut r = RetryState::new(self.settings.initial_backoff);
-        fetch_with_retries(&mut r, &self.settings, &url)
+        fetch_with_retries(&mut r, &self.settings, &url).map_err(|e| e.into())
     }
 }
 
@@ -197,13 +197,20 @@ fn fetch_with_retries(
         let request = build_request(&client, r.next_byte, &url)?;
 
         // send the request and convert error status codes to an `Err`.
-        let result = match client.execute(request) {
-            Ok(response) => match response.error_for_status() {
-                Ok(response) => Ok(response),
-                Err(err) => Err(err.into()),
-            },
-            Err(err) => Err(err.into()),
-        };
+        let result = client
+            .execute(request)
+            // if execute failed, exit function
+            .into()?
+            // creates an error if http code is not success
+            .error_for_status()
+            .map_err(|e| e.into());
+        // let result = match client.execute(request) {
+        //     Ok(response) => match response.error_for_status() {
+        //         Ok(response) => Ok(response),
+        //         Err(err) => Err(err.into()),
+        //     },
+        //     Err(err) => Err(err.into()),
+        // };
 
         // check the result, if it is a non-retryable error, return the error. if it is a retryable-
         // error, assign it to `retry_err`. if there is no error then return the read.
@@ -218,19 +225,22 @@ fn fetch_with_retries(
             }
             Err(err) => {
                 // if it's a status code error other than 5XX, return the error
-                if let Some(status) = err.status() {
-                    if !status.is_success() && !status.is_server_error() {
-                        return Err(err).into();
-                    }
+                if !err.is_retryable() {
+                    return Err(err);
                 }
+                // if let Some(status) = err.status() {
+                //     if !status.is_success() && !status.is_server_error() {
+                //         return Err(err).into();
+                //     }
+                // }
                 // we will retry if possible, otherwise we will return this err.
-                err.into()
+                err
             }
         };
 
         // increment the retry state and continue trying unless we are out of tries
         if r.current_try >= cs.tries - 1 {
-            return Err(retry_err).into();
+            return Err(retry_err);
         }
         r.increment(&cs);
         std::thread::sleep(r.wait);
@@ -278,15 +288,43 @@ impl WrapErr {
         }
     }
 
-    fn is_permanent_failure() -> bool {}
+    /// Any error that is not an HTTP status code is considered retryable (e.g. broken pipe).
+    /// Additionally, any 5XX HTTP code is considered retryable.
+    fn is_retryable(&self) -> bool {
+        if let Some(status) = self.inner.status() {
+            // true if the HTTP code is 5XX
+            status.is_server_error()
+        } else {
+            // the error is not an HTTP code, e.g. broken pipe
+            true
+        }
+    }
 }
 
-impl Into<TransportError> for WrapErr {}
+impl Into<TransportError> for WrapErr {
+    fn into(self) -> TransportError {
+        if self.is_404() {
+            TransportError::FileNotFound(Some(Box::new(self.inner)))
+        } else {
+            TransportError::Failure(Some(Box::new(self.inner)))
+        }
+    }
+}
 
 type LocalResult<T> = std::result::Result<T, WrapErr>;
 
-impl<T> Into<LocalResult<T>> for std::result::Result<T, reqwest::Error> {
-    fn into(self) -> LocalResult<T> {
-        self.map_err(|e| e.into())
-    }
-}
+// impl<T> Into<LocalResult<T>> for std::result::Result<T, reqwest::Error> {
+//     fn into(self) -> LocalResult<T> {
+//         self.map_err(|e| e.into())
+//     }
+// }
+
+// fn verify_response(response: reqwest::Response) -> LocalResult<reqwest::Response> {
+//     response.error_for_status().map_err(|e| e.into())
+// }
+
+// impl Into<LocalResult<reqwest::Response>>
+//     for std::result::Result<reqwest::Response, reqwest::Error>
+// {
+//     fn into(self) -> LocalResult<reqwest::Response> {}
+// }

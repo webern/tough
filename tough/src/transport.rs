@@ -73,7 +73,7 @@ impl Transport for FilesystemTransport {
     // type Error = std::io::Error;
 
     fn fetch(&self, url: Url) -> TransportResult {
-        use std::io::{Error, ErrorKind};
+        // use std::io::{Error, ErrorKind};
 
         if url.scheme() != "file" {
             return Err(TransportError::from_io_error(std::io::Error::new(

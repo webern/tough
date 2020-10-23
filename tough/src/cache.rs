@@ -1,7 +1,7 @@
 use crate::error::{self, Result};
 use crate::fetch::{fetch_max_size, fetch_sha256};
 use crate::schema::{RoleType, Target};
-use crate::{Repository, Transport};
+use crate::Repository;
 use snafu::{OptionExt, ResultExt};
 use std::fs::OpenOptions;
 use std::io::{Read, Write};

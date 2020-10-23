@@ -140,7 +140,7 @@ impl<'a, T: Transport> RepositoryEditor<'a, T> {
     /// `RepositoryEditor`. This `RepositoryEditor` will include all of the targets
     /// and bits of _extra metadata from the roles included. It will not, however,
     /// include the versions or expirations and the user is expected to set them.
-    pub fn from_repo<P>(root_path: P, repo: Repository<'a, T>) -> Result<RepositoryEditor<'a, T>>
+    pub fn from_repo<P>(root_path: P, repo: Repository) -> Result<RepositoryEditor<'a, T>>
     where
         P: AsRef<Path>,
     {
