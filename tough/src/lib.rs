@@ -50,7 +50,7 @@ use crate::fetch::{fetch_max_size, fetch_sha256};
 pub use crate::http::{ClientSettings, HttpTransport, RetryRead};
 use crate::schema::{DelegatedRole, Delegations};
 use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Timestamp};
-pub use crate::transport::{FilesystemTransport, Transport};
+pub use crate::transport::{FilesystemTransport, Transport, TransportError, TransportResult};
 use chrono::{DateTime, Utc};
 use snafu::{ensure, OptionExt, ResultExt};
 use std::borrow::Cow;
@@ -178,8 +178,8 @@ impl Default for Limits {
 ///
 /// You can create a `Repository` using the `load` method.
 #[derive(Debug, Clone)]
-pub struct Repository<'a, T: Transport> {
-    transport: &'a T,
+pub struct Repository {
+    transport: Box<dyn Transport>,
     consistent_snapshot: bool,
     datastore: Datastore,
     earliest_expiration: DateTime<Utc>,
@@ -194,7 +194,7 @@ pub struct Repository<'a, T: Transport> {
     expiration_enforcement: ExpirationEnforcement,
 }
 
-impl<'a, T: Transport> Repository<'a, T> {
+impl Repository {
     /// Load and verify TUF repository metadata.
     ///
     /// `root` is a [`Read`]er for the trusted root metadata file, which you must ship with your
@@ -215,7 +215,7 @@ impl<'a, T: Transport> Repository<'a, T> {
     ///
     /// `metadata_base_url` and `targets_base_url` are the HTTP(S) base URLs for where the client
     /// can find metadata (such as root.json) and targets (as listed in targets.json).
-    pub fn load<R: Read>(transport: &'a T, settings: Settings<R>) -> Result<Self> {
+    pub fn load<R: Read>(transport: Box<dyn Transport>, settings: Settings<R>) -> Result<Self> {
         let metadata_base_url = parse_url(settings.metadata_base_url)?;
         let targets_base_url = parse_url(settings.targets_base_url)?;
 
@@ -223,7 +223,7 @@ impl<'a, T: Transport> Repository<'a, T> {
 
         // 0. Load the trusted root metadata file + 1. Update the root metadata file
         let root = load_root(
-            transport,
+            transport.as_ref(),
             settings.root,
             &datastore,
             settings.limits.max_root_size,

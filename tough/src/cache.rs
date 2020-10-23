@@ -7,7 +7,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::Path;
 
-impl<'a, T: Transport> Repository<'a, T> {
+impl Repository {
     /// Cache an entire or partial repository to disk, including all required metadata.
     /// The cached repo will be local, using filesystem paths.
     ///
