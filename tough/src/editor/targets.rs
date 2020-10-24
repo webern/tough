@@ -54,8 +54,8 @@ const SPEC_VERSION: &str = "1.0.0";
 /// `sign()` method, which takes a given set of signing keys, builds each of
 /// the roles using the data provided, and signs the roles. This results in a
 /// `SignedDelegatedTargets` which can be used to write the updated metadata to disk.
-#[derive(Debug, Clone)]
-pub struct TargetsEditor<'a> {
+#[derive(Debug)]
+pub struct TargetsEditor {
     /// The name of the targets role
     name: String,
     /// The metadata containing keyids for the role
@@ -79,10 +79,10 @@ pub struct TargetsEditor<'a> {
 
     limits: Option<Limits>,
 
-    transport: Option<&'a dyn Transport>,
+    transport: Option<Box<dyn Transport>>,
 }
 
-impl<'a> TargetsEditor<'a> {
+impl TargetsEditor {
     /// Creates a `TargetsEditor` for a newly created role
     pub fn new(name: &str) -> Self {
         TargetsEditor {
@@ -121,7 +121,7 @@ impl<'a> TargetsEditor<'a> {
     /// Creates a `TargetsEditor` with the provided targets from an already loaded repo
     /// `version` and `expires` are thrown out to encourage updating the version and expiration
     /// If a `Repository` has been loaded, use `from_repo()` to preserve the `Transport` and `Limits`.
-    pub fn from_repo(repo: &'a Repository, name: &str) -> Result<Self> {
+    pub fn from_repo(repo: Repository, name: &str) -> Result<Self> {
         let (targets, key_holder) = if name == "targets" {
             (
                 repo.targets.signed.clone(),
@@ -149,7 +149,7 @@ impl<'a> TargetsEditor<'a> {
             );
             (targets, key_holder)
         };
-        Ok(TargetsEditor::<'a> {
+        Ok(TargetsEditor {
             key_holder: Some(key_holder),
             delegations: targets.delegations,
             new_targets: None,
@@ -160,7 +160,7 @@ impl<'a> TargetsEditor<'a> {
             new_roles: None,
             _extra: Some(targets._extra),
             limits: Some(repo.limits),
-            transport: Some(repo.transport.borrow()),
+            transport: Some(repo.transport),
         })
     }
 
@@ -170,7 +170,7 @@ impl<'a> TargetsEditor<'a> {
     }
 
     /// Add a transport to the `TargetsEditor`, only necessary if loading a role
-    pub fn transport(&mut self, transport: &'a dyn Transport) {
+    pub fn transport(&mut self, transport: Box<dyn Transport>) {
         self.transport = Some(transport);
     }
 
@@ -370,7 +370,11 @@ impl<'a> TargetsEditor<'a> {
         keys: Option<HashMap<Decoded<Hex>, Key>>,
     ) -> Result<&mut Self> {
         let limits = self.limits.context(error::MissingLimits)?;
-        let transport = self.transport.context(error::MissingTransport)?;
+        let transport: &dyn Transport = self
+            .transport
+            .as_ref()
+            .context(error::MissingTransport)?
+            .borrow();
 
         let metadata_base_url = parse_url(metadata_url)?;
         // path to updated metadata
@@ -382,7 +386,7 @@ impl<'a> TargetsEditor<'a> {
                     url: metadata_base_url,
                 })?;
         let reader = Box::new(fetch_max_size(
-            transport,
+            transport.borrow(),
             role_url,
             limits.max_targets_size,
             "max targets limit",
@@ -557,4 +561,25 @@ fn parse_url(url: &str) -> Result<Url> {
         url.to_mut().push('/');
     }
     Url::parse(&url).context(error::ParseUrl { url })
+}
+
+impl Clone for TargetsEditor {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            key_holder: self.key_holder.clone(),
+            delegations: self.delegations.clone(),
+            new_targets: self.new_targets.clone(),
+            existing_targets: self.existing_targets.clone(),
+            version: self.version.clone(),
+            expires: self.expires.clone(),
+            new_roles: self.new_roles.clone(),
+            _extra: self._extra.clone(),
+            limits: self.limits.clone(),
+            transport: self
+                .transport
+                .as_ref()
+                .and_then(|some| Some(some.boxed_clone())),
+        }
+    }
 }

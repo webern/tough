@@ -6,7 +6,7 @@ mod tests {
     use crate::editor::RepositoryEditor;
     use crate::key_source::LocalKeySource;
     use crate::schema::{Signed, Snapshot, Target, Targets, Timestamp};
-    use crate::transport::FilesystemTransport;
+    // use crate::transport::FilesystemTransport;
     use chrono::{Duration, Utc};
     use std::num::NonZeroU64;
     use std::path::PathBuf;

@@ -31,9 +31,9 @@ impl RepoPaths {
     }
 }
 
-fn load_tuf_reference_impl<'a>(paths: &'a mut RepoPaths) -> Repository<'a, FilesystemTransport> {
+fn load_tuf_reference_impl(paths: RepoPaths) -> Repository {
     Repository::load(
-        &tough::FilesystemTransport,
+        Box::new(tough::FilesystemTransport),
         Settings {
             root: &mut paths.root(),
             datastore: None,

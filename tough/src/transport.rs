@@ -1,4 +1,5 @@
 use serde::export::Formatter;
+use std::borrow::Borrow;
 use std::fmt::{Debug, Display};
 use std::io::{ErrorKind, Read};
 use url::Url;
@@ -62,12 +63,27 @@ unsafe impl Send for TransportError {}
 unsafe impl Sync for TransportError {}
 
 impl std::error::Error for TransportError {
-    fn source(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            TransportError::FileNotFound(e) => e.and_then(|e| Some(e.as_ref())),
-            TransportError::Failure(e) => e.and_then(|e| Some(e.as_ref())),
+            TransportError::FileNotFound(e) => match e {
+                None => None,
+                Some(e) => Some(coerce_error(e.borrow())),
+            },
+
+            //e.and_then(|e| Some(coerce_error(e.as_ref()))),
+            TransportError::Failure(e) => match e {
+                None => None,
+                Some(e) => Some(coerce_error(e.borrow())),
+            },
+            //e.and_then(|e| Some(coerce_error(e.as_ref()))),
         }
     }
+}
+
+fn coerce_error<'a>(
+    e: &'a (dyn std::error::Error + Send + Sync + 'static),
+) -> &'a (dyn std::error::Error + 'static) {
+    e
 }
 
 /// Provides a `Transport` for local files.

@@ -21,7 +21,7 @@
 #![forbid(missing_debug_implementations, missing_copy_implementations)]
 #![deny(rust_2018_idioms)]
 // missing_docs is on its own line to make it easy to comment out when making changes.
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 #![warn(clippy::pedantic)]
 #![allow(
     clippy::module_name_repetitions,

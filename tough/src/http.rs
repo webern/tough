@@ -336,7 +336,7 @@ impl WrapErr {
                     true
                 }
             }
-            ErrType::Io(e) => false,
+            ErrType::Io(_) => false,
         }
     }
 
@@ -380,7 +380,11 @@ impl Into<std::io::Error> for WrapErr {
         match self.inner {
             ErrType::Reqwest(e) => {
                 if let Some(status) = e.status() {
-                    std::io::Error::new(std::io::ErrorKind::NotFound, Box::new(e))
+                    if status.as_u16() == 404 {
+                        std::io::Error::new(std::io::ErrorKind::NotFound, Box::new(e))
+                    } else {
+                        std::io::Error::new(std::io::ErrorKind::Other, Box::new(e))
+                    }
                 } else {
                     std::io::Error::new(std::io::ErrorKind::Other, Box::new(e))
                 }
