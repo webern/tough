@@ -201,7 +201,7 @@ fn fetch_with_retries(
         .timeout(cs.timeout)
         .connect_timeout(cs.connect_timeout)
         .build()
-        .into()?;
+        .map_err(|e| WrapErr::wrap(e))?;
     // retry loop
     loop {
         // build the request
@@ -211,10 +211,10 @@ fn fetch_with_retries(
         let result = client
             .execute(request)
             // if execute failed, exit function
-            .into()?
+            .map_err(|e| WrapErr::wrap(e))?
             // creates an error if http code is not success
             .error_for_status()
-            .map_err(|e| e.into());
+            .map_err(|e| WrapErr::wrap(e));
         // let result = match client.execute(request) {
         //     Ok(response) => match response.error_for_status() {
         //         Ok(response) => Ok(response),
@@ -260,16 +260,20 @@ fn fetch_with_retries(
 
 fn build_request(client: &Client, next_byte: usize, url: &Url) -> LocalResult<Request> {
     if next_byte == 0 {
-        let request = client.request(Method::GET, url.as_str()).build().into()?;
+        let request = client
+            .request(Method::GET, url.as_str())
+            .build()
+            .map_err(|e| WrapErr::wrap(e))?;
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
-        let header_value = HeaderValue::from_str(header_value_string.as_str()).into()?;
+        let header_value = HeaderValue::from_str(header_value_string.as_str())
+            .map_err(|e| WrapErr::invalid_header(e))?;
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
-            .into()?;
+            .map_err(|e| WrapErr::wrap(e))?;
         Ok(request)
     }
 }
@@ -349,6 +353,15 @@ impl WrapErr {
 
     fn wrap_io(err: std::io::Error) -> Self {
         err.into()
+    }
+
+    fn invalid_header(e: reqwest::header::InvalidHeaderValue) -> Self {
+        Self {
+            inner: ErrType::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("bad header: {:?}", e),
+            )),
+        }
     }
 }
 
