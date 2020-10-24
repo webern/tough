@@ -7,7 +7,7 @@ use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
 use reqwest::Method;
 // use snafu::ResultExt;
 use std::cmp::Ordering;
-use std::io::Read;
+use std::io::{Error, Read};
 use std::time::Duration;
 use url::Url;
 
@@ -70,7 +70,9 @@ impl Transport for HttpTransport {
     /// returned `RetryRead` will also retry as necessary per the `ClientSettings`.
     fn fetch(&self, url: Url) -> TransportResult {
         let mut r = RetryState::new(self.settings.initial_backoff);
-        fetch_with_retries(&mut r, &self.settings, &url).map_err(|e| e.into())
+        Ok(Box::new(
+            fetch_with_retries(&mut r, &self.settings, &url).map_err(|e| e.into())?,
+        ))
     }
 
     fn boxed_clone(&self) -> Box<dyn Transport> {
@@ -120,7 +122,12 @@ impl Read for RetryRead {
                 return Err(retry_err);
             }
             let new_retry_read =
-                fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)?;
+                fetch_with_retries(&mut self.retry_state, &self.settings, &self.url).map_err(
+                    |e| {
+                        let ioerr: std::io::Error = e.into();
+                        ioerr
+                    },
+                )?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
         }
@@ -267,8 +274,13 @@ fn build_request(client: &Client, next_byte: usize, url: &Url) -> LocalResult<Re
     }
 }
 
+enum ErrType {
+    Reqwest(reqwest::Error),
+    Io(std::io::Error),
+}
+
 struct WrapErr {
-    inner: reqwest::Error,
+    inner: ErrType,
 }
 
 // impl From<reqwest::Error> for WrapErr {
@@ -279,38 +291,88 @@ struct WrapErr {
 
 impl Into<WrapErr> for reqwest::Error {
     fn into(self) -> WrapErr {
-        WrapErr { inner: self }
+        WrapErr {
+            inner: ErrType::Reqwest(self),
+        }
+    }
+}
+
+impl Into<WrapErr> for std::io::Error {
+    fn into(self) -> WrapErr {
+        WrapErr {
+            inner: ErrType::Io(self),
+        }
     }
 }
 
 impl WrapErr {
     fn is_404(&self) -> bool {
-        if let Some(status) = self.inner.status() {
-            status.as_u16() == 404
-        } else {
-            false
+        match &self.inner {
+            ErrType::Reqwest(e) => {
+                if let Some(status) = e.status() {
+                    status.as_u16() == 404
+                } else {
+                    false
+                }
+            }
+            ErrType::Io(e) => e.kind() == std::io::ErrorKind::NotFound,
         }
     }
 
     /// Any error that is not an HTTP status code is considered retryable (e.g. broken pipe).
     /// Additionally, any 5XX HTTP code is considered retryable.
     fn is_retryable(&self) -> bool {
-        if let Some(status) = self.inner.status() {
-            // true if the HTTP code is 5XX
-            status.is_server_error()
-        } else {
-            // the error is not an HTTP code, e.g. broken pipe
-            true
+        match &self.inner {
+            ErrType::Reqwest(e) => {
+                if let Some(status) = e.status() {
+                    // true if the HTTP code is 5XX
+                    status.is_server_error()
+                } else {
+                    // the error is not an HTTP code, e.g. broken pipe
+                    true
+                }
+            }
+            ErrType::Io(e) => false,
         }
+    }
+
+    fn into_box(self) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+        match self.inner {
+            ErrType::Reqwest(e) => Box::new(e),
+            ErrType::Io(e) => Box::new(e),
+        }
+    }
+
+    fn wrap(err: reqwest::Error) -> Self {
+        err.into()
+    }
+
+    fn wrap_io(err: std::io::Error) -> Self {
+        err.into()
     }
 }
 
 impl Into<TransportError> for WrapErr {
     fn into(self) -> TransportError {
         if self.is_404() {
-            TransportError::FileNotFound(Some(Box::new(self.inner)))
+            TransportError::FileNotFound(Some(self.into_box()))
         } else {
-            TransportError::Failure(Some(Box::new(self.inner)))
+            TransportError::Failure(Some(self.into_box()))
+        }
+    }
+}
+
+impl Into<std::io::Error> for WrapErr {
+    fn into(self) -> Error {
+        match self.inner {
+            ErrType::Reqwest(e) => {
+                if let Some(status) = e.status() {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, Box::new(e))
+                } else {
+                    std::io::Error::new(std::io::ErrorKind::Other, Box::new(e))
+                }
+            }
+            ErrType::Io(e) => e,
         }
     }
 }
