@@ -72,6 +72,10 @@ impl Transport for HttpTransport {
         let mut r = RetryState::new(self.settings.initial_backoff);
         fetch_with_retries(&mut r, &self.settings, &url).map_err(|e| e.into())
     }
+
+    fn boxed_clone(&self) -> Box<dyn Transport> {
+        Box::new(Clone::clone(self))
+    }
 }
 
 /// This serves as a `Read`, but carries with it the necessary information to do retries.

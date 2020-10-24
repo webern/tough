@@ -53,7 +53,7 @@ mod tests {
         let key_source = LocalKeySource { path: root_key };
         let root_path = root_path();
 
-        let editor = RepositoryEditor::<FilesystemTransport>::new(&root_path).unwrap();
+        let editor = RepositoryEditor::new(&root_path).unwrap();
         assert!(editor.sign(&[Box::new(key_source)]).is_err());
     }
 
@@ -70,7 +70,7 @@ mod tests {
         let target4 = Target::from_path(target2_path).unwrap();
         let root_path = tuf_root_path();
 
-        let mut editor = RepositoryEditor::<FilesystemTransport>::new(&root_path).unwrap();
+        let mut editor = RepositoryEditor::new(&root_path).unwrap();
         editor
             .targets(targets)
             .unwrap()
@@ -89,7 +89,7 @@ mod tests {
         let target3 = targets_path().join("file3.txt");
         let root_path = tuf_root_path();
 
-        let mut editor = RepositoryEditor::<FilesystemTransport>::new(&root_path).unwrap();
+        let mut editor = RepositoryEditor::new(&root_path).unwrap();
         editor
             .targets(targets)
             .unwrap()
@@ -116,7 +116,7 @@ mod tests {
         let target3 = targets_path().join("file3.txt");
         let target_list = vec![target1, target2, target3];
 
-        let mut editor = RepositoryEditor::<FilesystemTransport>::new(&root).unwrap();
+        let mut editor = RepositoryEditor::new(&root).unwrap();
         editor
             .targets_expires(targets_expiration)
             .unwrap()
@@ -148,7 +148,7 @@ mod tests {
         .unwrap();
         let root_path = tuf_root_path();
 
-        let mut editor = RepositoryEditor::<FilesystemTransport>::new(&root_path).unwrap();
+        let mut editor = RepositoryEditor::new(&root_path).unwrap();
         editor
             .targets(targets)
             .unwrap()

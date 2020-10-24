@@ -53,7 +53,7 @@ use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Timestamp};
 pub use crate::transport::{FilesystemTransport, Transport, TransportError, TransportResult};
 use chrono::{DateTime, Utc};
 use snafu::{ensure, OptionExt, ResultExt};
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
@@ -177,7 +177,7 @@ impl Default for Limits {
 /// A TUF repository.
 ///
 /// You can create a `Repository` using the `load` method.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Repository {
     transport: Box<dyn Transport>,
     consistent_snapshot: bool,
@@ -234,7 +234,7 @@ impl Repository {
 
         // 2. Download the timestamp metadata file
         let timestamp = load_timestamp(
-            transport,
+            transport.borrow(),
             &root,
             &datastore,
             settings.limits.max_timestamp_size,
@@ -244,7 +244,7 @@ impl Repository {
 
         // 3. Download the snapshot metadata file
         let snapshot = load_snapshot(
-            transport,
+            transport.borrow(),
             &root,
             &timestamp,
             &datastore,
@@ -254,7 +254,7 @@ impl Repository {
 
         // 4. Download the targets metadata file
         let targets = load_targets(
-            transport,
+            transport.borrow(),
             &root,
             &snapshot,
             &datastore,
@@ -410,8 +410,8 @@ fn parse_url<S: AsRef<str>>(url: S) -> Result<Url> {
 
 /// Steps 0 and 1 of the client application, which load the current root metadata file based on a
 /// trusted root metadata file.
-fn load_root<R: Read, T: Transport>(
-    transport: &T,
+fn load_root<R: Read>(
+    transport: &dyn Transport,
     root: R,
     datastore: &Datastore,
     max_root_size: u64,
@@ -576,8 +576,8 @@ fn load_root<R: Read, T: Transport>(
 }
 
 /// Step 2 of the client application, which loads the timestamp metadata file.
-fn load_timestamp<T: Transport>(
-    transport: &T,
+fn load_timestamp(
+    transport: &dyn Transport,
     root: &Signed<Root>,
     datastore: &Datastore,
     max_timestamp_size: u64,
@@ -647,8 +647,8 @@ fn load_timestamp<T: Transport>(
 }
 
 /// Step 3 of the client application, which loads the snapshot metadata file.
-fn load_snapshot<T: Transport>(
-    transport: &T,
+fn load_snapshot(
+    transport: &dyn Transport,
     root: &Signed<Root>,
     timestamp: &Signed<Timestamp>,
     datastore: &Datastore,
@@ -781,8 +781,8 @@ fn load_snapshot<T: Transport>(
 }
 
 /// Step 4 of the client application, which loads the targets metadata file.
-fn load_targets<T: Transport>(
-    transport: &T,
+fn load_targets(
+    transport: &dyn Transport,
     root: &Signed<Root>,
     snapshot: &Signed<Snapshot>,
     datastore: &Datastore,
@@ -915,8 +915,8 @@ fn load_targets<T: Transport>(
 }
 
 // Follow the paths of delegations starting with the top level targets.json delegation
-fn load_delegations<T: Transport>(
-    transport: &T,
+fn load_delegations(
+    transport: &dyn Transport,
     snapshot: &Signed<Snapshot>,
     consistent_snapshot: bool,
     metadata_base_url: &Url,
@@ -1035,5 +1035,25 @@ mod tests {
         assert!(!non_enforcing);
         let default = ExpirationEnforcement::default();
         assert_eq!(default, ExpirationEnforcement::Safe);
+    }
+}
+
+impl Clone for Repository {
+    fn clone(&self) -> Self {
+        Self {
+            transport: self.transport.boxed_clone(),
+            consistent_snapshot: Clone::clone(&self.consistent_snapshot),
+            datastore: Clone::clone(&self.datastore),
+            earliest_expiration: Clone::clone(&self.earliest_expiration),
+            earliest_expiration_role: Clone::clone(&self.earliest_expiration_role),
+            root: Clone::clone(&self.root),
+            snapshot: Clone::clone(&self.snapshot),
+            timestamp: Clone::clone(&self.timestamp),
+            targets: Clone::clone(&self.targets),
+            limits: Clone::clone(&self.limits),
+            metadata_base_url: Clone::clone(&self.metadata_base_url),
+            targets_base_url: Clone::clone(&self.targets_base_url),
+            expiration_enforcement: Clone::clone(&self.expiration_enforcement),
+        }
     }
 }

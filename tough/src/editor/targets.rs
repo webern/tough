@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 use ring::rand::SystemRandom;
 use serde_json::Value;
 use snafu::{OptionExt, ResultExt};
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::path::Path;
@@ -55,7 +55,7 @@ const SPEC_VERSION: &str = "1.0.0";
 /// the roles using the data provided, and signs the roles. This results in a
 /// `SignedDelegatedTargets` which can be used to write the updated metadata to disk.
 #[derive(Debug, Clone)]
-pub struct TargetsEditor<'a, T: Transport> {
+pub struct TargetsEditor<'a> {
     /// The name of the targets role
     name: String,
     /// The metadata containing keyids for the role
@@ -79,10 +79,10 @@ pub struct TargetsEditor<'a, T: Transport> {
 
     limits: Option<Limits>,
 
-    transport: Option<&'a T>,
+    transport: Option<&'a dyn Transport>,
 }
 
-impl<'a, T: Transport> TargetsEditor<'a, T> {
+impl<'a> TargetsEditor<'a> {
     /// Creates a `TargetsEditor` for a newly created role
     pub fn new(name: &str) -> Self {
         TargetsEditor {
@@ -121,10 +121,7 @@ impl<'a, T: Transport> TargetsEditor<'a, T> {
     /// Creates a `TargetsEditor` with the provided targets from an already loaded repo
     /// `version` and `expires` are thrown out to encourage updating the version and expiration
     /// If a `Repository` has been loaded, use `from_repo()` to preserve the `Transport` and `Limits`.
-    pub fn from_repo(repo: &Repository, name: &str) -> Result<Self>
-    where
-        T: Transport,
-    {
+    pub fn from_repo(repo: &'a Repository, name: &str) -> Result<Self> {
         let (targets, key_holder) = if name == "targets" {
             (
                 repo.targets.signed.clone(),
@@ -152,7 +149,7 @@ impl<'a, T: Transport> TargetsEditor<'a, T> {
             );
             (targets, key_holder)
         };
-        Ok(TargetsEditor::<'a, T> {
+        Ok(TargetsEditor::<'a> {
             key_holder: Some(key_holder),
             delegations: targets.delegations,
             new_targets: None,
@@ -163,7 +160,7 @@ impl<'a, T: Transport> TargetsEditor<'a, T> {
             new_roles: None,
             _extra: Some(targets._extra),
             limits: Some(repo.limits),
-            transport: Some(repo.transport),
+            transport: Some(repo.transport.borrow()),
         })
     }
 
@@ -173,7 +170,7 @@ impl<'a, T: Transport> TargetsEditor<'a, T> {
     }
 
     /// Add a transport to the `TargetsEditor`, only necessary if loading a role
-    pub fn transport(&mut self, transport: &'a T) {
+    pub fn transport(&mut self, transport: &'a dyn Transport) {
         self.transport = Some(transport);
     }
 

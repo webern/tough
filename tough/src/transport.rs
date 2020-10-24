@@ -1,12 +1,12 @@
 use serde::export::Formatter;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::io::{ErrorKind, Read};
 use url::Url;
 
 pub type TransportResult = Result<Box<dyn Read>, TransportError>;
 
 /// A trait to abstract over the method/protocol by which files are obtained.
-pub trait Transport {
+pub trait Transport: Debug {
     // /// The type of `Read` object that the `fetch` function will return.
     // type Stream: Read;
     //
@@ -15,6 +15,8 @@ pub trait Transport {
 
     /// Opens a `Read` object for the file specified by `url`.
     fn fetch(&self, url: Url) -> TransportResult;
+
+    fn boxed_clone(&self) -> Box<dyn Transport>;
 }
 
 #[derive(Debug)]
@@ -84,5 +86,9 @@ impl Transport for FilesystemTransport {
 
         let f = std::fs::File::open(url.path()).map_err(|e| TransportError::from_io_error(e))?;
         Ok(Box::new(f))
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Transport> {
+        Box::new(Clone::clone(self))
     }
 }
