@@ -16,6 +16,10 @@ pub trait Transport: Debug {
     /// Opens a `Read` object for the file specified by `url`.
     fn fetch(&self, url: Url) -> TransportResult;
 
+    /// Returns a clone of `self` as a `Box<dyn Transport>`. Because the `Repository` object holds
+    /// a `Box<dyn Transport>`, and because we want the `Repository` object to implement `Clone`,
+    /// we need a way of cloning the held `Transport` without knowing its underlying type. We cannot
+    /// require `Clone` on `Transport` because if we do, it can no longer serve as a 'trait object'.
     fn boxed_clone(&self) -> Box<dyn Transport>;
 }
 
@@ -58,7 +62,7 @@ unsafe impl Send for TransportError {}
 unsafe impl Sync for TransportError {}
 
 impl std::error::Error for TransportError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
         match self {
             TransportError::FileNotFound(e) => e.and_then(|e| Some(e.as_ref())),
             TransportError::Failure(e) => e.and_then(|e| Some(e.as_ref())),
