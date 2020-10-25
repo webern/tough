@@ -1,10 +1,15 @@
+# TODO - remove changes from this file
 name: Rust
 on:
   pull_request:
-    branches: [develop]
-  # TODO - remove
-  tags:        
-  - transport-* # build when transport work tags are pushed
+    branches: [develop, transport-develop]
+  push:
+    branches:
+      - transport-develop
+      - transport-wrk-2
+    tags:        
+      - transport-* # build when transport work tags are pushed
+
 jobs:
   build:
     runs-on: ubuntu-latest
