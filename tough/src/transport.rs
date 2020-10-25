@@ -24,87 +24,61 @@ pub trait Transport: Debug {
     fn boxed_clone(&self) -> Box<dyn Transport>;
 }
 
+#[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
+pub enum TransportErrorKind {
+    FileNotFound,
+    // /// The scheme, e.g. `file://` or `ftp://`, is not supported by this transport. The offending
+    // /// scheme is given
+    // WrongScheme(String),
+    Failure,
+}
+
 #[derive(Debug)]
-pub enum TransportError {
-    FileNotFound(Option<Box<dyn std::error::Error + Send + Sync + 'static>>),
-    Failure(Option<Box<dyn std::error::Error + Send + Sync + 'static>>),
+pub struct TransportError {
+    kind: TransportErrorKind,
+    url: String,
+    source: Box<dyn std::error::Error + Send + Sync>,
 }
 
 impl TransportError {
-    pub fn name(&self) -> &'static str {
-        match self {
-            TransportError::FileNotFound(_) => "FileNotFound",
-            TransportError::Failure(_) => "Failure",
+    fn new<S, E>(kind: TransportErrorKind, url: U, source_error: E) -> TransportError
+    where
+        E: std::error::Error + Send + Sync,
+        S: AsRef<str>,
+    {
+        Self {
+            kind,
+            url: url.as_ref().to_owned(),
+            source: Box::new(source_error),
         }
     }
+}
 
-    fn from_io_error(e: std::io::Error) -> TransportError {
-        match e.kind() {
-            ErrorKind::NotFound => TransportError::FileNotFound(Some(Box::new(e))),
-            _ => TransportError::Failure(Some(Box::new(e))),
-        }
-    }
-
-    pub fn into_inner(self) -> Option<Box<dyn std::error::Error + Send + Sync + 'static>> {
-        match self {
-            TransportError::FileNotFound(a) => a,
-            TransportError::Failure(b) => b,
-        }
-    }
-
-    pub fn inner(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
-        let source = match self {
-            TransportError::FileNotFound(a) => a,
-            TransportError::Failure(b) => b,
-        };
-        // source.as_ref().and_then(|e| Some(e.borrow()))
-        // source.as_ref().and_then(|e| Some(e.borrow()))
-        source.as_ref().map(|e| e.borrow())
+impl std::error::Error for TransportError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.source.borrow())
     }
 }
 
 impl Display for TransportError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())?;
-        if let Some(e) = match self {
-            TransportError::FileNotFound(e) => e,
-            TransportError::Failure(f) => f,
-        } {
-            write!(f, ": {}", e)?;
-        }
-        Ok(())
+        write!(
+            f,
+            "Transport error '{:?}' for '{}', source: {}",
+            self.kind, self.url, self.source
+        )
     }
 }
 
-unsafe impl Send for TransportError {}
-unsafe impl Sync for TransportError {}
-
-impl std::error::Error for TransportError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        // self.inner()
-        //     .and_then(|xxx| Some(coerce_error(xxx.borrow())))
-        self.inner().map(|xxx| coerce_error(xxx.borrow()))
-        // match self {
-        //     TransportError::FileNotFound(e) => match e {
-        //         None => None,
-        //         Some(e) => Some(coerce_error(e.borrow())),
-        //     },
-        //
-        //     //e.and_then(|e| Some(coerce_error(e.as_ref()))),
-        //     TransportError::Failure(e) => match e {
-        //         None => None,
-        //         Some(e) => Some(coerce_error(e.borrow())),
-        //     },
-        //     //e.and_then(|e| Some(coerce_error(e.as_ref()))),
-        // }
-    }
-}
-
-fn coerce_error<'a>(
-    e: &'a (dyn std::error::Error + Send + Sync + 'static),
-) -> &'a (dyn std::error::Error + 'static) {
-    e
-}
+// /// The error type to use when implementing the `Transport` trait.
+// #[derive(Debug, Snafu)]
+// #[snafu(visibility = "pub")]
+// #[non_exhaustive]
+// pub enum TransportError {
+//     #[snafu(display("File not found '{}': {}", string, source))]
+//     FileNotFound { url: String, source: std::io::Error },
+// }
 
 /// Provides a `Transport` for local files.
 #[derive(Debug, Clone, Copy)]
@@ -118,13 +92,24 @@ impl Transport for FilesystemTransport {
         // use std::io::{Error, ErrorKind};
 
         if url.scheme() != "file" {
-            return Err(TransportError::from_io_error(std::io::Error::new(
-                ErrorKind::InvalidInput,
-                format!("unexpected URL scheme: {}", url.scheme()),
-            )));
+            return Err(TransportError::new(
+                TransportErrorKind::Failure,
+                &url,
+                format!("Wrong URL scheme: {}", url.scheme()),
+            ));
+            // return Err(TransportError::from_io_error(std::io::Error::new(
+            //     ErrorKind::InvalidInput,
+            //     format!("unexpected URL scheme: {}", url.scheme()),
+            // )));
         }
 
-        let f = std::fs::File::open(url.path()).map_err(TransportError::from_io_error)?;
+        let f = std::fs::File::open(url.path()).map_err(|e| {
+            let kind = match e.kind() {
+                ErrorKind::NotFound => TransportErrorKind::FileNotFound,
+                _ => TransportErrorKind::Failure,
+            };
+            TransportError::new(kind, url, e)
+        })?;
         Ok(Box::new(f))
     }
 
