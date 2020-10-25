@@ -71,7 +71,7 @@ impl Transport for HttpTransport {
     }
 
     fn boxed_clone(&self) -> Box<dyn Transport> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 
