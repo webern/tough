@@ -608,21 +608,25 @@ impl RepositoryEditor {
         keys: Option<HashMap<Decoded<Hex>, Key>>,
     ) -> Result<&mut Self> {
         let limits = self.limits.context(error::MissingLimits)?;
-        // let transport = self.transport.context(error::MissingTransport)?.as_ref();
-        self.check_transport()?;
+        let transport = self
+            .transport
+            .as_ref()
+            .context(error::MissingTransport)?
+            .boxed_clone();
+        // self.check_transport()?;
         self.targets_editor_mut()?.limits(limits);
-        // self.targets_editor_mut()?
-        //     .transport(transport.boxed_clone());
+        self.targets_editor_mut()?
+            .transport(transport.boxed_clone());
         self.targets_editor_mut()?
             .add_role(name, metadata_url, paths, threshold, keys)?;
 
         Ok(self)
     }
 
-    fn check_transport(&self) -> Result<()> {
-        ensure!(self.transport.is_some(), crate::error::MissingTransport);
-        Ok(())
-    }
+    // fn check_transport(&self) -> Result<()> {
+    //     ensure!(self.transport.is_some(), crate::error::MissingTransport);
+    //     Ok(())
+    // }
 
     // =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
 

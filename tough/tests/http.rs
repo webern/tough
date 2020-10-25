@@ -146,7 +146,7 @@ mod http_integ {
             });
             let root_path = tuf_reference_impl_root_json();
             Repository::load(
-                &transport,
+                Box::new(transport),
                 Settings {
                     root: File::open(&root_path).unwrap(),
                     datastore: None,
