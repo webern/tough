@@ -201,7 +201,7 @@ fn fetch_with_retries(
         .timeout(cs.timeout)
         .connect_timeout(cs.connect_timeout)
         .build()
-        .map_err(|e| WrapErr::wrap(e))?;
+        .map_err(WrapErr::wrap)?;
     // retry loop
     loop {
         // build the request
@@ -211,10 +211,10 @@ fn fetch_with_retries(
         let result = client
             .execute(request)
             // if execute failed, exit function
-            .map_err(|e| WrapErr::wrap(e))?
+            .map_err(WrapErr::wrap)?
             // creates an error if http code is not success
             .error_for_status()
-            .map_err(|e| WrapErr::wrap(e));
+            .map_err(WrapErr::wrap);
         // let result = match client.execute(request) {
         //     Ok(response) => match response.error_for_status() {
         //         Ok(response) => Ok(response),
@@ -263,17 +263,17 @@ fn build_request(client: &Client, next_byte: usize, url: &Url) -> LocalResult<Re
         let request = client
             .request(Method::GET, url.as_str())
             .build()
-            .map_err(|e| WrapErr::wrap(e))?;
+            .map_err(WrapErr::wrap)?;
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
         let header_value = HeaderValue::from_str(header_value_string.as_str())
-            .map_err(|e| WrapErr::invalid_header(e))?;
+            .map_err(|e| WrapErr::invalid_header(&e))?;
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
-            .map_err(|e| WrapErr::wrap(e))?;
+            .map_err(WrapErr::wrap)?;
         Ok(request)
     }
 }
@@ -312,13 +312,7 @@ impl Into<WrapErr> for std::io::Error {
 impl WrapErr {
     fn is_404(&self) -> bool {
         match &self.inner {
-            ErrType::Reqwest(e) => {
-                if let Some(status) = e.status() {
-                    status.as_u16() == 404
-                } else {
-                    false
-                }
-            }
+            ErrType::Reqwest(e) => e.status().map_or(false, |status| status.as_u16() == 404),
             ErrType::Io(e) => e.kind() == std::io::ErrorKind::NotFound,
         }
     }
@@ -327,15 +321,7 @@ impl WrapErr {
     /// Additionally, any 5XX HTTP code is considered retryable.
     fn is_retryable(&self) -> bool {
         match &self.inner {
-            ErrType::Reqwest(e) => {
-                if let Some(status) = e.status() {
-                    // true if the HTTP code is 5XX
-                    status.is_server_error()
-                } else {
-                    // the error is not an HTTP code, e.g. broken pipe
-                    true
-                }
-            }
+            ErrType::Reqwest(e) => e.status().map_or(true, |status| status.is_server_error()),
             ErrType::Io(_) => false,
         }
     }
@@ -355,7 +341,7 @@ impl WrapErr {
     //     err.into()
     // }
 
-    fn invalid_header(e: reqwest::header::InvalidHeaderValue) -> Self {
+    fn invalid_header(e: &reqwest::header::InvalidHeaderValue) -> Self {
         Self {
             inner: ErrType::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -376,6 +362,7 @@ impl Into<TransportError> for WrapErr {
 }
 
 impl Into<std::io::Error> for WrapErr {
+    #[allow(clippy::option_if_let_else)]
     fn into(self) -> Error {
         match self.inner {
             ErrType::Reqwest(e) => {

@@ -571,15 +571,12 @@ impl Clone for TargetsEditor {
             delegations: self.delegations.clone(),
             new_targets: self.new_targets.clone(),
             existing_targets: self.existing_targets.clone(),
-            version: self.version.clone(),
-            expires: self.expires.clone(),
+            version: self.version,
+            expires: self.expires,
             new_roles: self.new_roles.clone(),
             _extra: self._extra.clone(),
-            limits: self.limits.clone(),
-            transport: self
-                .transport
-                .as_ref()
-                .and_then(|some| Some(some.boxed_clone())),
+            limits: self.limits,
+            transport: self.transport.as_ref().map(|some| some.boxed_clone()),
         }
     }
 }

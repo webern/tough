@@ -44,6 +44,23 @@ impl TransportError {
             _ => TransportError::Failure(Some(Box::new(e))),
         }
     }
+
+    pub fn into_inner(self) -> Option<Box<dyn std::error::Error + Send + Sync + 'static>> {
+        match self {
+            TransportError::FileNotFound(a) => a,
+            TransportError::Failure(b) => b,
+        }
+    }
+
+    pub fn inner(&self) -> Option<&(dyn std::error::Error + Send + Sync + 'static)> {
+        let source = match self {
+            TransportError::FileNotFound(a) => a,
+            TransportError::Failure(b) => b,
+        };
+        // source.as_ref().and_then(|e| Some(e.borrow()))
+        // source.as_ref().and_then(|e| Some(e.borrow()))
+        source.as_ref().map(|e| e.borrow())
+    }
 }
 
 impl Display for TransportError {
@@ -51,7 +68,7 @@ impl Display for TransportError {
         write!(f, "{}", self.name())?;
         if let Some(e) = match self {
             TransportError::FileNotFound(e) => e,
-            TransportError::Failure(e) => e,
+            TransportError::Failure(f) => f,
         } {
             write!(f, ": {}", e)?;
         }
@@ -64,19 +81,22 @@ unsafe impl Sync for TransportError {}
 
 impl std::error::Error for TransportError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            TransportError::FileNotFound(e) => match e {
-                None => None,
-                Some(e) => Some(coerce_error(e.borrow())),
-            },
-
-            //e.and_then(|e| Some(coerce_error(e.as_ref()))),
-            TransportError::Failure(e) => match e {
-                None => None,
-                Some(e) => Some(coerce_error(e.borrow())),
-            },
-            //e.and_then(|e| Some(coerce_error(e.as_ref()))),
-        }
+        // self.inner()
+        //     .and_then(|xxx| Some(coerce_error(xxx.borrow())))
+        self.inner().map(|xxx| coerce_error(xxx.borrow()))
+        // match self {
+        //     TransportError::FileNotFound(e) => match e {
+        //         None => None,
+        //         Some(e) => Some(coerce_error(e.borrow())),
+        //     },
+        //
+        //     //e.and_then(|e| Some(coerce_error(e.as_ref()))),
+        //     TransportError::Failure(e) => match e {
+        //         None => None,
+        //         Some(e) => Some(coerce_error(e.borrow())),
+        //     },
+        //     //e.and_then(|e| Some(coerce_error(e.as_ref()))),
+        // }
     }
 }
 
@@ -104,7 +124,7 @@ impl Transport for FilesystemTransport {
             )));
         }
 
-        let f = std::fs::File::open(url.path()).map_err(|e| TransportError::from_io_error(e))?;
+        let f = std::fs::File::open(url.path()).map_err(TransportError::from_io_error)?;
         Ok(Box::new(f))
     }
 
