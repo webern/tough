@@ -34,9 +34,8 @@ mod http_happy {
         let mock_file1_txt = create_successful_get_mock("targets/file1.txt");
         let mock_file2_txt = create_successful_get_mock("targets/file2.txt");
         let base_url = Url::from_str(mockito::server_url().as_str()).unwrap();
-        let transport = HttpTransport::default();
         let repo = Repository::load(
-            &transport,
+            Box::new(HttpTransport::default()),
             Settings {
                 root: File::open(repo_dir.join("metadata").join("1.root.json")).unwrap(),
                 datastore: None,

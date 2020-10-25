@@ -89,9 +89,8 @@ impl DownloadArgs {
         };
 
         // load repository
-        let transport = HttpTransport::new();
         let repository = Repository::load(
-            &transport,
+            Box::new(HttpTransport::new()),
             Settings {
                 root: File::open(&root_path).context(error::OpenRoot { path: &root_path })?,
                 datastore: None,

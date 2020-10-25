@@ -351,9 +351,9 @@ impl WrapErr {
         err.into()
     }
 
-    fn wrap_io(err: std::io::Error) -> Self {
-        err.into()
-    }
+    // fn wrap_io(err: std::io::Error) -> Self {
+    //     err.into()
+    // }
 
     fn invalid_header(e: reqwest::header::InvalidHeaderValue) -> Self {
         Self {
