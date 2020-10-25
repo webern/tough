@@ -1,6 +1,6 @@
 //! The `http` module provides `HttpTransport` which enables `Repository` objects to be
 //! loaded over HTTP
-use crate::transport::TransportErrorKind;
+use crate::transport::Kind;
 use crate::{Transport, TransportError};
 use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
@@ -120,12 +120,8 @@ impl Read for RetryRead {
                 fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)
                     // TODO - restore actual, underlying io error?
                     .map_err(|e| match e.kind {
-                        TransportErrorKind::FileNotFound => {
-                            std::io::Error::new(std::io::ErrorKind::NotFound, e)
-                        }
-                        TransportErrorKind::Failure => {
-                            std::io::Error::new(std::io::ErrorKind::Other, e)
-                        }
+                        Kind::FileNotFound => std::io::Error::new(std::io::ErrorKind::NotFound, e),
+                        _ => std::io::Error::new(std::io::ErrorKind::Other, e),
                     })?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
@@ -200,7 +196,7 @@ fn fetch_with_retries(
         .timeout(cs.timeout)
         .connect_timeout(cs.connect_timeout)
         .build()
-        .map_err(|e| TransportError::new(TransportErrorKind::Failure, &url, e))?;
+        .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
     // TODO - variant for this error type? .context(error::HttpClientBuild { url: url.clone() })?;
     // retry loop
     loop {
@@ -231,7 +227,7 @@ fn fetch_with_retries(
                 // if it's a status code error other than 5XX, return the error
                 if let Some(status) = err.status() {
                     if !status.is_success() && !status.is_server_error() {
-                        return Err(TransportError::new(TransportErrorKind::Failure, &url, err));
+                        return Err(TransportError::new(Kind::Failure, &url, err));
                         // TODO - variant for this error type? .context(error::HttpFetch { url: url.clone() });
                     }
                 }
@@ -242,11 +238,7 @@ fn fetch_with_retries(
 
         // increment the retry state and continue trying unless we are out of tries
         if r.current_try >= cs.tries - 1 {
-            return Err(TransportError::new(
-                TransportErrorKind::Failure,
-                &url,
-                retry_err,
-            ));
+            return Err(TransportError::new(Kind::Failure, &url, retry_err));
             // TODO - variant for this error type? .context(error::HttpRetries { url: url.clone(), tries: cs.tries, });
         }
         r.increment(&cs);
@@ -260,19 +252,19 @@ fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request
             .request(Method::GET, url.as_str())
             .build()
             // TODO - variant for this error type? .context(error::HttpRequestBuild { url: url.clone() })?;
-            .map_err(|e| TransportError::new(TransportErrorKind::Failure, &url, e))?;
+            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
         let header_value = HeaderValue::from_str(header_value_string.as_str())
             // TODO - variant for this error type? .context(error::HttpHeader { header_value: &header_value_string, })?;
-            .map_err(|e| TransportError::new(TransportErrorKind::Failure, &url, e))?;
+            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
             // TODO - variant for this error type? .context(error::HttpRequestBuild { url: url.clone() })?;
-            .map_err(|e| TransportError::new(TransportErrorKind::Failure, &url, e))?;
+            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
         Ok(request)
     }
 }
