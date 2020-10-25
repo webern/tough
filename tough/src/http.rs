@@ -1,13 +1,14 @@
 //! The `http` module provides `HttpTransport` which enables `Repository` objects to be
 //! loaded over HTTP
-use crate::{Transport, TransportError, TransportResult};
+use crate::error::{self, Error, Result};
+use crate::Transport;
 use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
 use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
 use reqwest::Method;
-// use snafu::ResultExt;
+use snafu::ResultExt;
 use std::cmp::Ordering;
-use std::io::{Error, Read};
+use std::io::Read;
 use std::time::Duration;
 use url::Url;
 
@@ -63,20 +64,14 @@ impl HttpTransport {
 
 /// Implement the `tough` `Transport` trait for `HttpRetryTransport`
 impl Transport for HttpTransport {
-    // type Stream = RetryRead;
-    // type Error = Error;
+    type Stream = RetryRead;
+    type Error = Error;
 
     /// Send a GET request to the URL. Request will be retried per the `ClientSettings`. The
     /// returned `RetryRead` will also retry as necessary per the `ClientSettings`.
-    fn fetch(&self, url: Url) -> TransportResult {
+    fn fetch(&self, url: Url) -> Result<Self::Stream> {
         let mut r = RetryState::new(self.settings.initial_backoff);
-        Ok(Box::new(
-            fetch_with_retries(&mut r, &self.settings, &url).map_err(|e| e.into())?,
-        ))
-    }
-
-    fn boxed_clone(&self) -> Box<dyn Transport> {
-        Box::new(Clone::clone(self))
+        fetch_with_retries(&mut r, &self.settings, &url)
     }
 }
 
@@ -122,12 +117,7 @@ impl Read for RetryRead {
                 return Err(retry_err);
             }
             let new_retry_read =
-                fetch_with_retries(&mut self.retry_state, &self.settings, &self.url).map_err(
-                    |e| {
-                        let ioerr: std::io::Error = e.into();
-                        ioerr
-                    },
-                )?;
+                fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
         }
@@ -190,60 +180,46 @@ impl RetryState {
 }
 
 /// Sends a `GET` request to the `url`. Retries the request as necessary per the `ClientSettings`.
-fn fetch_with_retries(
-    r: &mut RetryState,
-    cs: &ClientSettings,
-    url: &Url,
-) -> LocalResult<Box<RetryRead>> {
+fn fetch_with_retries(r: &mut RetryState, cs: &ClientSettings, url: &Url) -> Result<RetryRead> {
     trace!("beginning fetch for '{}'", url);
     // create a reqwest client
     let client = ClientBuilder::new()
         .timeout(cs.timeout)
         .connect_timeout(cs.connect_timeout)
         .build()
-        .map_err(WrapErr::wrap)?;
+        .context(error::HttpClientBuild { url: url.clone() })?;
     // retry loop
     loop {
         // build the request
         let request = build_request(&client, r.next_byte, &url)?;
 
         // send the request and convert error status codes to an `Err`.
-        let result = client
-            .execute(request)
-            // if execute failed, exit function
-            .map_err(WrapErr::wrap)?
-            // creates an error if http code is not success
-            .error_for_status()
-            .map_err(WrapErr::wrap);
-        // let result = match client.execute(request) {
-        //     Ok(response) => match response.error_for_status() {
-        //         Ok(response) => Ok(response),
-        //         Err(err) => Err(err.into()),
-        //     },
-        //     Err(err) => Err(err.into()),
-        // };
+        let result = match client.execute(request) {
+            Ok(response) => match response.error_for_status() {
+                Ok(response) => Ok(response),
+                Err(err) => Err(err),
+            },
+            Err(err) => Err(err),
+        };
 
         // check the result, if it is a non-retryable error, return the error. if it is a retryable-
         // error, assign it to `retry_err`. if there is no error then return the read.
         let retry_err = match result {
             Ok(reqwest_read) => {
-                return Ok(Box::new(RetryRead {
+                return Ok(RetryRead {
                     retry_state: *r,
                     settings: *cs,
                     response: reqwest_read,
                     url: url.clone(),
-                }));
+                });
             }
             Err(err) => {
                 // if it's a status code error other than 5XX, return the error
-                if !err.is_retryable() {
-                    return Err(err);
+                if let Some(status) = err.status() {
+                    if !status.is_success() && !status.is_server_error() {
+                        return Err(err).context(error::HttpFetch { url: url.clone() });
+                    }
                 }
-                // if let Some(status) = err.status() {
-                //     if !status.is_success() && !status.is_server_error() {
-                //         return Err(err).into();
-                //     }
-                // }
                 // we will retry if possible, otherwise we will return this err.
                 err
             }
@@ -251,150 +227,34 @@ fn fetch_with_retries(
 
         // increment the retry state and continue trying unless we are out of tries
         if r.current_try >= cs.tries - 1 {
-            return Err(retry_err);
+            return Err(retry_err).context(error::HttpRetries {
+                url: url.clone(),
+                tries: cs.tries,
+            });
         }
         r.increment(&cs);
         std::thread::sleep(r.wait);
     }
 }
 
-fn build_request(client: &Client, next_byte: usize, url: &Url) -> LocalResult<Request> {
+fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request> {
     if next_byte == 0 {
         let request = client
             .request(Method::GET, url.as_str())
             .build()
-            .map_err(WrapErr::wrap)?;
+            .context(error::HttpRequestBuild { url: url.clone() })?;
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
-        let header_value = HeaderValue::from_str(header_value_string.as_str())
-            .map_err(|e| WrapErr::invalid_header(&e))?;
+        let header_value =
+            HeaderValue::from_str(header_value_string.as_str()).context(error::HttpHeader {
+                header_value: &header_value_string,
+            })?;
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
-            .map_err(WrapErr::wrap)?;
+            .context(error::HttpRequestBuild { url: url.clone() })?;
         Ok(request)
     }
 }
-
-enum ErrType {
-    Reqwest(reqwest::Error),
-    Io(std::io::Error),
-}
-
-struct WrapErr {
-    inner: ErrType,
-}
-
-// impl From<reqwest::Error> for WrapErr {
-//     fn from(e: reqwest::Error) -> Self {
-//         Self { inner: e }
-//     }
-// }
-
-impl Into<WrapErr> for reqwest::Error {
-    fn into(self) -> WrapErr {
-        WrapErr {
-            inner: ErrType::Reqwest(self),
-        }
-    }
-}
-
-impl Into<WrapErr> for std::io::Error {
-    fn into(self) -> WrapErr {
-        WrapErr {
-            inner: ErrType::Io(self),
-        }
-    }
-}
-
-impl WrapErr {
-    fn is_404(&self) -> bool {
-        match &self.inner {
-            ErrType::Reqwest(e) => e.status().map_or(false, |status| status.as_u16() == 404),
-            ErrType::Io(e) => e.kind() == std::io::ErrorKind::NotFound,
-        }
-    }
-
-    /// Any error that is not an HTTP status code is considered retryable (e.g. broken pipe).
-    /// Additionally, any 5XX HTTP code is considered retryable.
-    fn is_retryable(&self) -> bool {
-        match &self.inner {
-            ErrType::Reqwest(e) => e.status().map_or(true, |status| status.is_server_error()),
-            ErrType::Io(_) => false,
-        }
-    }
-
-    fn into_box(self) -> Box<dyn std::error::Error + Send + Sync + 'static> {
-        match self.inner {
-            ErrType::Reqwest(e) => Box::new(e),
-            ErrType::Io(e) => Box::new(e),
-        }
-    }
-
-    fn wrap(err: reqwest::Error) -> Self {
-        err.into()
-    }
-
-    // fn wrap_io(err: std::io::Error) -> Self {
-    //     err.into()
-    // }
-
-    fn invalid_header(e: &reqwest::header::InvalidHeaderValue) -> Self {
-        Self {
-            inner: ErrType::Io(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("bad header: {:?}", e),
-            )),
-        }
-    }
-}
-
-impl Into<TransportError> for WrapErr {
-    fn into(self) -> TransportError {
-        if self.is_404() {
-            TransportError::FileNotFound(Some(self.into_box()))
-        } else {
-            TransportError::Failure(Some(self.into_box()))
-        }
-    }
-}
-
-impl Into<std::io::Error> for WrapErr {
-    #[allow(clippy::option_if_let_else)]
-    fn into(self) -> Error {
-        match self.inner {
-            ErrType::Reqwest(e) => {
-                if let Some(status) = e.status() {
-                    if status.as_u16() == 404 {
-                        std::io::Error::new(std::io::ErrorKind::NotFound, Box::new(e))
-                    } else {
-                        std::io::Error::new(std::io::ErrorKind::Other, Box::new(e))
-                    }
-                } else {
-                    std::io::Error::new(std::io::ErrorKind::Other, Box::new(e))
-                }
-            }
-            ErrType::Io(e) => e,
-        }
-    }
-}
-
-type LocalResult<T> = std::result::Result<T, WrapErr>;
-
-// impl<T> Into<LocalResult<T>> for std::result::Result<T, reqwest::Error> {
-//     fn into(self) -> LocalResult<T> {
-//         self.map_err(|e| e.into())
-//     }
-// }
-
-// fn verify_response(response: reqwest::Response) -> LocalResult<reqwest::Response> {
-//     response.error_for_status().map_err(|e| e.into())
-// }
-
-// impl Into<LocalResult<reqwest::Response>>
-//     for std::result::Result<reqwest::Response, reqwest::Error>
-// {
-//     fn into(self) -> LocalResult<reqwest::Response> {}
-// }
