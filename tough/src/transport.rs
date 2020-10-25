@@ -1,10 +1,7 @@
 use serde::export::Formatter;
-use std::borrow::Borrow;
 use std::fmt::{Debug, Display};
 use std::io::{ErrorKind, Read};
 use url::Url;
-
-pub type TransportResult = Result<Box<dyn Read>, TransportError>;
 
 /// A trait to abstract over the method/protocol by which files are obtained.
 pub trait Transport: Debug {
@@ -15,7 +12,7 @@ pub trait Transport: Debug {
     // type Error: std::error::Error + Send + Sync + 'static;
 
     /// Opens a `Read` object for the file specified by `url`.
-    fn fetch(&self, url: Url) -> TransportResult;
+    fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError>;
 
     /// Returns a clone of `self` as a `Box<dyn Transport>`. Because the `Repository` object holds
     /// a `Box<dyn Transport>`, and because we want the `Repository` object to implement `Clone`,
@@ -36,28 +33,29 @@ pub enum TransportErrorKind {
 
 #[derive(Debug)]
 pub struct TransportError {
-    kind: TransportErrorKind,
-    url: String,
-    source: Box<dyn std::error::Error + Send + Sync>,
+    pub kind: TransportErrorKind,
+    pub url: String,
+    pub source: Box<dyn std::error::Error + Send + Sync>,
 }
 
 impl TransportError {
-    fn new<S, E>(kind: TransportErrorKind, url: U, source_error: E) -> TransportError
+    pub fn new<S, E>(kind: TransportErrorKind, url: S, source_error: E) -> TransportError
     where
-        E: std::error::Error + Send + Sync,
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
         S: AsRef<str>,
     {
         Self {
             kind,
             url: url.as_ref().to_owned(),
-            source: Box::new(source_error),
+            source: source_error.into(),
         }
     }
 }
 
 impl std::error::Error for TransportError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(self.source.borrow())
+        let x: &(dyn std::error::Error + 'static) = self.source.as_ref();
+        Some(x)
     }
 }
 
@@ -88,7 +86,7 @@ impl Transport for FilesystemTransport {
     // type Stream = std::fs::File;
     // type Error = std::io::Error;
 
-    fn fetch(&self, url: Url) -> TransportResult {
+    fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
         // use std::io::{Error, ErrorKind};
 
         if url.scheme() != "file" {
