@@ -264,13 +264,13 @@ impl Into<FetchResult> for Result<reqwest::Response, reqwest::Error> {
 /// In refactoring the fetch function it was found that the complexity lies primarily with decoding
 /// the `Result` from the GET request.
 enum HttpResult {
-    Ok(reqwest::Response),
+    Ok(reqwest::blocking::Response),
     Fatal(reqwest::Error),
     FatalFileNotFound(reqwest::Error),
     Retryable(reqwest::Error),
 }
 
-impl Into<HttpResult> for Result<reqwest::Response, reqwest::Error> {
+impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
     fn into(self) -> HttpResult {
         match self {
             Ok(response) => {
