@@ -128,6 +128,9 @@ mod http_integ {
             .stderr(Stdio::inherit())
             .output()
             .expect("failed to start server with docker containers");
+        if !output.status.success() {
+            panic!("Failed to run integration test HTTP servers, is docker running?");
+        }
         assert!(output.status.success());
 
         // load the tuf-reference-impl repo via http repeatedly through faulty proxies

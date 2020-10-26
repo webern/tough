@@ -105,24 +105,12 @@ impl Read for RetryRead {
                 return Err(retry_err);
             }
             self.retry_state.increment(&self.settings);
+            self.err_if_no_range_support(retry_err)?;
             // wait, then retry the request (with a range header).
             std::thread::sleep(self.retry_state.wait);
-            if !self.supports_range() {
-                // we cannot send a byte range request to this server, so return the error
-                error!(
-                    "an error occurred and we cannot retry because the server \
-                    does not support range requests '{}': {:?}",
-                    self.url, retry_err
-                );
-                return Err(retry_err);
-            }
             let new_retry_read =
                 fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)
-                    // TODO - restore actual, underlying io error?
-                    .map_err(|e| match e.kind {
-                        Kind::FileNotFound => std::io::Error::new(std::io::ErrorKind::NotFound, e),
-                        _ => std::io::Error::new(std::io::ErrorKind::Other, e),
-                    })?;
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
         }
@@ -140,6 +128,23 @@ impl RetryRead {
             }
         }
         false
+    }
+
+    /// Returns an error when we have received an error during read, but our server does not support
+    /// range headers. Our retry implementation considers this a fatal condition rather that trying
+    /// to start over from the beginning and advancing the `Read` to the point where failure
+    /// occurred.
+    fn err_if_no_range_support(&self, e: std::io::Error) -> std::io::Result<()> {
+        if !self.supports_range() {
+            // we cannot send a byte range request to this server, so return the error
+            error!(
+                "an error occurred and we cannot retry because the server \
+                    does not support range requests '{}': {:?}",
+                self.url, e
+            );
+            return Err(e);
+        }
+        Ok(())
     }
 }
 
