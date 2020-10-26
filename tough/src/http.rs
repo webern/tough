@@ -257,20 +257,22 @@ fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request
         let request = client
             .request(Method::GET, url.as_str())
             .build()
-            // TODO - variant for this error type? .context(error::HttpRequestBuild { url: url.clone() })?;
-            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
+            .context(http_error::RequestBuild)
+            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?; // TODO - remove
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
         let header_value = HeaderValue::from_str(header_value_string.as_str())
-            // TODO - variant for this error type? .context(error::HttpHeader { header_value: &header_value_string, })?;
-            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
+            .context(http_error::InvalidHeader {
+                header_value: &header_value_string,
+            })
+            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?; // TODO - remove
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
             .context(http_error::RequestBuild)
-            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
+            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?; // TODO - remove
         Ok(request)
     }
 }
@@ -292,7 +294,16 @@ mod http_error {
     #[non_exhaustive]
     #[allow(missing_docs)]
     pub enum HttpError {
-        #[snafu(display("Unable to build the HTTP request: {}", source))]
+        #[snafu(display("A non-retryable error occurred: {}", source))]
+        FetchFatal { source: reqwest::Error },
+
+        #[snafu(display("Invalid header value '{}': {}", header_value, source))]
+        InvalidHeader {
+            header_value: String,
+            source: reqwest::header::InvalidHeaderValue,
+        },
+
+        #[snafu(display("Unable to create HTTP request: {}", source))]
         RequestBuild { source: reqwest::Error },
     }
 }
