@@ -231,6 +231,7 @@ fn fetch_with_retries(
                 });
             }
             Err(err) => {
+                debug!("{:?} - error during fetch: {}", r, err);
                 // if it's a status code error other than 5XX, return the error
                 if let Some(status) = err.status() {
                     if !status.is_success() && !status.is_server_error() {
@@ -289,7 +290,7 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
                             HttpResult::Fatal(err)
                         }
                         Some(status) => {
-                            if status.is_server_error() {
+                            if !status.is_success() && status.is_server_error() {
                                 HttpResult::Retryable(err)
                             } else {
                                 match status.as_u16() {
