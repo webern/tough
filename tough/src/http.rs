@@ -1,11 +1,12 @@
 //! The `http` module provides `HttpTransport` which enables `Repository` objects to be
 //! loaded over HTTP
+use crate::error::Error::HttpRequestBuild;
 use crate::transport::Kind;
 use crate::{Transport, TransportError};
 use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
 use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
-use reqwest::Method;
+use reqwest::{Error, Method, StatusCode};
 use snafu::ResultExt;
 use std::cmp::Ordering;
 use std::io::Read;
@@ -249,6 +250,60 @@ fn fetch_with_retries(
         }
         r.increment(&cs);
         std::thread::sleep(r.wait);
+    }
+}
+
+struct FetchResult(Result<reqwest::Response, reqwest::Error>);
+
+impl Into<FetchResult> for Result<reqwest::Response, reqwest::Error> {
+    fn into(self) -> FetchResult {
+        FetchResult(self)
+    }
+}
+
+/// In refactoring the fetch function it was found that the complexity lies primarily with decoding
+/// the `Result` from the GET request.
+enum HttpResult {
+    Ok(reqwest::Response),
+    Fatal(reqwest::Error),
+    FatalFileNotFound(reqwest::Error),
+    Retryable(reqwest::Error),
+}
+
+impl Into<HttpResult> for Result<reqwest::Response, reqwest::Error> {
+    fn into(self) -> HttpResult {
+        match self {
+            Ok(response) => {
+                // check the status code of the response
+                match response.error_for_status() {
+                    Ok(ok) => {
+                        // http status is ok. return early from this function with happiness
+                        HttpResult::Ok(ok)
+                    }
+                    // http status is an error
+                    Err(err) => match err.status() {
+                        None => {
+                            // this shouldn't happen, we received this err from the err_for_status
+                            // function, so we would expect the err to have a status. oh well, we
+                            // cannot reasonably consider this a retryable error.
+                            HttpResult::Fatal(err)
+                        }
+                        Some(status) => {
+                            if status.is_server_error() {
+                                HttpResult::Retryable(err)
+                            } else {
+                                match status.as_u16() {
+                                    403 | 404 => HttpResult::FatalFileNotFound(err),
+                                    _ => HttpResult::Fatal(err),
+                                }
+                            }
+                        }
+                    },
+                }
+            }
+            // something error other than an http status code occurred, assume non-retryable
+            Err(err) => HttpResult::Fatal(err),
+        }
     }
 }
 
