@@ -6,6 +6,7 @@ use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
 use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
 use reqwest::Method;
+use snafu::ResultExt;
 use std::cmp::Ordering;
 use std::io::Read;
 use std::time::Duration;
@@ -268,8 +269,30 @@ fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
-            // TODO - variant for this error type? .context(error::HttpRequestBuild { url: url.clone() })?;
+            .context(http_error::RequestBuild)
             .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
         Ok(request)
+    }
+}
+
+mod http_error {
+    #![allow(clippy::default_trait_access)]
+
+    // use crate::schema;
+    // use crate::schema::RoleType;
+    // use chrono::{DateTime, Utc};
+    use snafu::Snafu;
+    // use std::io;
+    // use std::path::PathBuf;
+    // use url::Url;
+
+    /// The error type for the HTTP transport module.
+    #[derive(Debug, Snafu)]
+    #[snafu(visibility = "pub(crate)")]
+    #[non_exhaustive]
+    #[allow(missing_docs)]
+    pub enum HttpError {
+        #[snafu(display("Unable to build the HTTP request: {}", source))]
+        RequestBuild { source: reqwest::Error },
     }
 }
