@@ -34,6 +34,8 @@ pub trait Transport: Debug {
     fn boxed_clone(&self) -> Box<dyn Transport>;
 }
 
+// =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
+
 /// The kind of error that the transport object experienced during `fetch`.
 ///
 /// # Why
@@ -49,7 +51,7 @@ pub trait Transport: Debug {
 #[non_exhaustive]
 pub enum Kind {
     /// The trait does not handle the URL scheme named in `String`. e.g. `file://` or `http://`.
-    BadUrlScheme,
+    UnsupportedUrlScheme,
     /// The file cannot be found.
     FileNotFound,
     /// The transport failed for any other reason, e.g. IO error, HTTP broken pipe, etc.
@@ -82,9 +84,9 @@ impl TransportError {
     }
 
     /// Creates a [`TransportError`] for reporting an unhandled URL type.
-    pub fn bad_url_scheme<S: AsRef<str>>(url: S) -> Self {
+    pub fn unsupported_url<S: AsRef<str>>(url: S) -> Self {
         TransportError::new(
-            Kind::BadUrlScheme,
+            Kind::UnsupportedUrlScheme,
             url,
             "Transport cannot handle the given URL scheme.".to_string(),
         )
@@ -110,6 +112,8 @@ impl Display for TransportError {
     }
 }
 
+// =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
+
 /// Provides a [`Transport`] for local files.
 #[derive(Debug, Clone, Copy)]
 pub struct FilesystemTransport;
@@ -117,7 +121,7 @@ pub struct FilesystemTransport;
 impl Transport for FilesystemTransport {
     fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
         if url.scheme() != "file" {
-            return Err(TransportError::bad_url_scheme(url));
+            return Err(TransportError::unsupported_url(url));
         }
 
         let f = std::fs::File::open(url.path()).map_err(|e| {
