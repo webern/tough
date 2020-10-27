@@ -375,17 +375,14 @@ fn update_command_expired_repo_allow() {
     // assert success for update command
     update_expected.0.success();
     // Load the updated repo
-    let temp_datastore = TempDir::new().unwrap();
-    let updated_metadata_base_url = &test_utils::dir_url(outdir.path().join("metadata"));
-    let updated_targets_base_url = &test_utils::dir_url(outdir.path().join("targets"));
     let root_json = test_utils::test_data().join("simple-rsa").join("root.json");
     let repo = Repository::load(
-        &tough::FilesystemTransport,
+        Box::new(tough::FilesystemTransport),
         Settings {
             root: File::open(root_json).unwrap(),
-            datastore: temp_datastore.as_ref(),
-            metadata_base_url: updated_metadata_base_url,
-            targets_base_url: updated_targets_base_url,
+            datastore: None,
+            metadata_base_url: dir_url(outdir.path().join("metadata")),
+            targets_base_url: dir_url(outdir.path().join("targets")),
             limits: Limits::default(),
             expiration_enforcement: ExpirationEnforcement::Safe,
         },
