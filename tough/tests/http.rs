@@ -117,9 +117,6 @@ mod http_integ {
     /// triggering retries in the `fetch` loop.
     #[test]
     fn test_retries() {
-        env_logger::Builder::new()
-            .filter(Some("tough"), log::LevelFilter::Trace)
-            .init();
         // run docker images to create a faulty http representation of tuf-reference-impl
         let output = Command::new("bash")
             .arg(
@@ -137,7 +134,7 @@ mod http_integ {
         }
 
         // load the tuf-reference-impl repo via http repeatedly through faulty proxies
-        for i in 0..50 {
+        for i in 0..5 {
             let transport = HttpTransport::from_settings(ClientSettings {
                 timeout: std::time::Duration::from_secs(30),
                 connect_timeout: std::time::Duration::from_secs(30),

@@ -1,12 +1,10 @@
 //! The `http` module provides `HttpTransport` which enables `Repository` objects to be
 //! loaded over HTTP
-use crate::error::Error::HttpRequestBuild;
-use crate::transport::Kind;
 use crate::{Transport, TransportError};
 use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
 use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
-use reqwest::{Error, Method, StatusCode};
+use reqwest::Method;
 use snafu::ResultExt;
 use std::cmp::Ordering;
 use std::io::Read;
@@ -366,9 +364,8 @@ mod http_error {
     // use crate::schema;
     // use crate::schema::RoleType;
     // use chrono::{DateTime, Utc};
-    use super::RetryState;
     use crate::transport::Kind;
-    use crate::{ClientSettings, RetryRead, TransportError};
+    use crate::TransportError;
     use snafu::Snafu;
     use std::io::{Error, ErrorKind};
     // use std::io;
