@@ -69,11 +69,7 @@ impl Transport for HttpTransport {
     /// returned `RetryRead` will also retry as necessary per the `ClientSettings`.
     fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
         let mut r = RetryState::new(self.settings.initial_backoff);
-        Ok(Box::new(fetch_with_retries_v2(
-            &mut r,
-            &self.settings,
-            &url,
-        )?))
+        Ok(Box::new(fetch_with_retries(&mut r, &self.settings, &url)?))
     }
 
     fn boxed_clone(&self) -> Box<dyn Transport> {
@@ -115,7 +111,7 @@ impl Read for RetryRead {
             // wait, then retry the request (with a range header).
             std::thread::sleep(self.retry_state.wait);
             let new_retry_read =
-                fetch_with_retries_v2(&mut self.retry_state, &self.settings, &self.url)
+                fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
@@ -176,8 +172,7 @@ impl RetryState {
 }
 
 impl RetryState {
-    /// Increments the count and the wait duration. Returns `true` if `current_try` is less than or
-    /// equal to `tries` (i.e. if you should retry).
+    /// Increments the count and the wait duration.
     fn increment(&mut self, settings: &ClientSettings) {
         if self.current_try > 0 {
             let new_wait = self.wait.mul_f32(settings.backoff_factor);
@@ -197,69 +192,6 @@ impl RetryState {
 
 /// Sends a `GET` request to the `url`. Retries the request as necessary per the `ClientSettings`.
 fn fetch_with_retries(
-    r: &mut RetryState,
-    cs: &ClientSettings,
-    url: &Url,
-) -> Result<RetryRead, TransportError> {
-    trace!("beginning fetch for '{}'", url);
-    // create a reqwest client
-    let client = ClientBuilder::new()
-        .timeout(cs.timeout)
-        .connect_timeout(cs.connect_timeout)
-        .build()
-        .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
-    // TODO - variant for this error type? .context(error::HttpClientBuild { url: url.clone() })?;
-    // retry loop
-    loop {
-        // build the request
-        let request = build_request(&client, r.next_byte, &url)?;
-
-        // send the request and convert error status codes to an `Err`.
-        let result = match client.execute(request) {
-            Ok(response) => match response.error_for_status() {
-                Ok(response) => Ok(response),
-                Err(err) => Err(err),
-            },
-            Err(err) => Err(err),
-        };
-
-        // check the result, if it is a non-retryable error, return the error. if it is a retryable-
-        // error, assign it to `retry_err`. if there is no error then return the read.
-        let retry_err = match result {
-            Ok(reqwest_read) => {
-                return Ok(RetryRead {
-                    retry_state: *r,
-                    settings: *cs,
-                    response: reqwest_read,
-                    url: url.clone(),
-                });
-            }
-            Err(err) => {
-                debug!("{:?} - error during fetch: {}", r, err);
-                // if it's a status code error other than 5XX, return the error
-                if let Some(status) = err.status() {
-                    if !status.is_success() && !status.is_server_error() {
-                        return Err(TransportError::new(Kind::Failure, &url, err));
-                        // TODO - variant for this error type? .context(error::HttpFetch { url: url.clone() });
-                    }
-                }
-                // we will retry if possible, otherwise we will return this err.
-                err
-            }
-        };
-
-        // increment the retry state and continue trying unless we are out of tries
-        if r.current_try >= cs.tries - 1 {
-            return Err(TransportError::new(Kind::Failure, &url, retry_err));
-            // TODO - variant for this error type? .context(error::HttpRetries { url: url.clone(), tries: cs.tries, });
-        }
-        r.increment(&cs);
-        std::thread::sleep(r.wait);
-    }
-}
-
-/// Sends a `GET` request to the `url`. Retries the request as necessary per the `ClientSettings`.
-fn fetch_with_retries_v2(
     r: &mut RetryState,
     cs: &ClientSettings,
     url: &Url,
@@ -308,44 +240,6 @@ fn fetch_with_retries_v2(
             }
         }
 
-        // let result = match client.execute(request) {
-        //     Ok(response) => match response.error_for_status() {
-        //         Ok(response) => Ok(response),
-        //         Err(err) => Err(err),
-        //     },
-        //     Err(err) => Err(err),
-        // };
-        //
-        // // check the result, if it is a non-retryable error, return the error. if it is a retryable-
-        // // error, assign it to `retry_err`. if there is no error then return the read.
-        // let retry_err = match result {
-        //     Ok(reqwest_read) => {
-        //         return Ok(RetryRead {
-        //             retry_state: *r,
-        //             settings: *cs,
-        //             response: reqwest_read,
-        //             url: url.clone(),
-        //         });
-        //     }
-        //     Err(err) => {
-        //         debug!("{:?} - error during fetch: {}", r, err);
-        //         // if it's a status code error other than 5XX, return the error
-        //         if let Some(status) = err.status() {
-        //             if !status.is_success() && !status.is_server_error() {
-        //                 return Err(TransportError::new(Kind::Failure, &url, err));
-        //                 // TODO - variant for this error type? .context(error::HttpFetch { url: url.clone() });
-        //             }
-        //         }
-        //         // we will retry if possible, otherwise we will return this err.
-        //         err
-        //     }
-        // };
-        //
-        // // increment the retry state and continue trying unless we are out of tries
-        // if r.current_try >= cs.tries - 1 {
-        //     return Err(TransportError::new(Kind::Failure, &url, retry_err));
-        //     // TODO - variant for this error type? .context(error::HttpRetries { url: url.clone(), tries: cs.tries, });
-        // }
         r.increment(&cs);
         std::thread::sleep(r.wait);
     }
