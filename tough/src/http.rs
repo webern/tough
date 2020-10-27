@@ -69,7 +69,10 @@ impl Transport for HttpTransport {
     /// returned `RetryRead` will also retry as necessary per the `ClientSettings`.
     fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
         let mut r = RetryState::new(self.settings.initial_backoff);
-        Ok(Box::new(fetch_with_retries(&mut r, &self.settings, &url)?))
+        Ok(Box::new(
+            fetch_with_retries(&mut r, &self.settings, &url)
+                .map_err(|e| http_error::to_transport(url.to_string(), e))?,
+        ))
     }
 
     fn boxed_clone(&self) -> Box<dyn Transport> {
@@ -112,7 +115,7 @@ impl Read for RetryRead {
             std::thread::sleep(self.retry_state.wait);
             let new_retry_read =
                 fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
         }
@@ -195,15 +198,15 @@ fn fetch_with_retries(
     r: &mut RetryState,
     cs: &ClientSettings,
     url: &Url,
-) -> Result<RetryRead, TransportError> {
+) -> Result<RetryRead, http_error::HttpError> {
     trace!("beginning fetch for '{}'", url);
     // create a reqwest client
     let client = ClientBuilder::new()
         .timeout(cs.timeout)
         .connect_timeout(cs.connect_timeout)
         .build()
-        .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
-    // TODO - variant for this error type? .context(error::HttpClientBuild { url: url.clone() })?;
+        .context(http_error::Client)?;
+
     // retry loop
     loop {
         // build the request
@@ -224,18 +227,20 @@ fn fetch_with_retries(
             }
             HttpResult::Fatal(err) => {
                 trace!("{:?} - returning fatal error from fetch: {}", r, err);
-                return Err(TransportError::new(Kind::Failure, &url, err));
+                return Err(http_error::HttpError::FetchFatal { source: err });
             }
             HttpResult::FileNotFound(err) => {
                 trace!("{:?} - returning file not found from fetch: {}", r, err);
-                return Err(TransportError::new(Kind::FileNotFound, &url, err));
+                return Err(http_error::HttpError::FetchFileNotFound { source: err });
             }
             HttpResult::Retryable(err) => {
                 trace!("{:?} - retryable error: {}", r, err);
                 if r.current_try >= cs.tries - 1 {
                     debug!("{:?} - returning failure, no more retries: {}", r, err);
-                    return Err(TransportError::new(Kind::Failure, &url, err));
-                    // TODO - variant for this error type? .context(error::HttpRetries { url: url.clone(), tries: cs.tries, });
+                    return Err(http_error::HttpError::FetchNoMoreRetries {
+                        tries: cs.tries,
+                        source: err,
+                    });
                 }
             }
         }
@@ -328,27 +333,29 @@ fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpRes
 }
 
 /// Builds a GET request. If `next_byte` is greater than zero, adds a byte range header to the request.
-fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request, TransportError> {
+fn build_request(
+    client: &Client,
+    next_byte: usize,
+    url: &Url,
+) -> Result<Request, http_error::HttpError> {
     if next_byte == 0 {
         let request = client
             .request(Method::GET, url.as_str())
             .build()
-            .context(http_error::RequestBuild)
-            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?; // TODO - remove
+            .context(http_error::RequestBuild)?;
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
-        let header_value = HeaderValue::from_str(header_value_string.as_str())
-            .context(http_error::InvalidHeader {
+        let header_value = HeaderValue::from_str(header_value_string.as_str()).context(
+            http_error::InvalidHeader {
                 header_value: &header_value_string,
-            })
-            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?; // TODO - remove
+            },
+        )?;
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
-            .context(http_error::RequestBuild)
-            .map_err(|e| TransportError::new(Kind::Failure, &url, e))?; // TODO - remove
+            .context(http_error::RequestBuild)?;
         Ok(request)
     }
 }
@@ -359,19 +366,32 @@ mod http_error {
     // use crate::schema;
     // use crate::schema::RoleType;
     // use chrono::{DateTime, Utc};
+    use super::RetryState;
+    use crate::transport::Kind;
+    use crate::{ClientSettings, RetryRead, TransportError};
     use snafu::Snafu;
+    use std::io::{Error, ErrorKind};
     // use std::io;
     // use std::path::PathBuf;
     // use url::Url;
 
     /// The error type for the HTTP transport module.
     #[derive(Debug, Snafu)]
-    #[snafu(visibility = "pub(crate)")]
+    #[snafu(visibility = "pub(super)")]
     #[non_exhaustive]
     #[allow(missing_docs)]
     pub enum HttpError {
+        #[snafu(display("The HTTP client could not be built: {}", source))]
+        Client { source: reqwest::Error },
+
         #[snafu(display("A non-retryable error occurred: {}", source))]
         FetchFatal { source: reqwest::Error },
+
+        #[snafu(display("File not found: {}", source))]
+        FetchFileNotFound { source: reqwest::Error },
+
+        #[snafu(display("Fetch failed after {} retries: {}", tries, source))]
+        FetchNoMoreRetries { tries: u32, source: reqwest::Error },
 
         #[snafu(display("Invalid header value '{}': {}", header_value, source))]
         InvalidHeader {
@@ -381,5 +401,23 @@ mod http_error {
 
         #[snafu(display("Unable to create HTTP request: {}", source))]
         RequestBuild { source: reqwest::Error },
+    }
+
+    impl Into<std::io::Error> for HttpError {
+        fn into(self) -> Error {
+            match self {
+                HttpError::FetchFileNotFound { .. } => {
+                    std::io::Error::new(ErrorKind::NotFound, self)
+                }
+                _ => std::io::Error::new(ErrorKind::Other, self),
+            }
+        }
+    }
+
+    pub(super) fn to_transport(url: String, e: HttpError) -> TransportError {
+        match e {
+            HttpError::FetchFileNotFound { .. } => TransportError::new(Kind::FileNotFound, url, e),
+            _ => TransportError::new(Kind::Failure, url, e),
+        }
     }
 }
