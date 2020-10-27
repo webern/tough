@@ -262,7 +262,7 @@ enum HttpResult {
     Retryable(reqwest::Error),
 }
 
-/// Takes the `Result` type from the reqwest client `execute` function, and categorizes it into an
+/// Takes the `Result` type from `reqwest::Client::execute`, and categorizes it into an
 /// `HttpResult` variant.
 impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
     fn into(self) -> HttpResult {
