@@ -3,7 +3,6 @@ use crate::fetch::{fetch_max_size, fetch_sha256};
 use crate::schema::{RoleType, Target};
 use crate::Repository;
 use snafu::{OptionExt, ResultExt};
-use std::borrow::Borrow;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -139,7 +138,7 @@ impl Repository {
         outdir: P,
     ) -> Result<()> {
         let mut read = fetch_max_size(
-            self.transport.borrow(),
+            self.transport.as_ref(),
             self.metadata_base_url
                 .join(filename)
                 .context(error::JoinUrl {
@@ -222,7 +221,7 @@ impl Repository {
         filename: &str,
     ) -> Result<impl Read> {
         fetch_sha256(
-            self.transport.borrow(),
+            self.transport.as_ref(),
             self.targets_base_url
                 .join(&filename)
                 .context(error::JoinUrl {

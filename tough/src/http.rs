@@ -270,7 +270,7 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
             Ok(response) => {
                 trace!("response received");
                 // checks the status code of the response for errors
-                parse_response(response)
+                parse_response_code(response)
             }
             Err(err) => {
                 // an error occurred before the HTTP header could be read
@@ -282,7 +282,7 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
 }
 
 /// Checks the HTTP response code and converts a non-successful response code to an error.
-fn parse_response(response: reqwest::blocking::Response) -> HttpResult {
+fn parse_response_code(response: reqwest::blocking::Response) -> HttpResult {
     match response.error_for_status() {
         Ok(ok) => {
             trace!("response is success");

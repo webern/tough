@@ -53,7 +53,7 @@ use crate::schema::{Role, RoleType, Root, Signed, Snapshot, Timestamp};
 pub use crate::transport::{FilesystemTransport, Transport, TransportError};
 use chrono::{DateTime, Utc};
 use snafu::{ensure, OptionExt, ResultExt};
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
@@ -223,7 +223,7 @@ impl Repository {
 
         // 0. Load the trusted root metadata file + 1. Update the root metadata file
         let root = load_root(
-            transport.borrow(),
+            transport.as_ref(),
             settings.root,
             &datastore,
             settings.limits.max_root_size,
@@ -234,7 +234,7 @@ impl Repository {
 
         // 2. Download the timestamp metadata file
         let timestamp = load_timestamp(
-            transport.borrow(),
+            transport.as_ref(),
             &root,
             &datastore,
             settings.limits.max_timestamp_size,
@@ -244,7 +244,7 @@ impl Repository {
 
         // 3. Download the snapshot metadata file
         let snapshot = load_snapshot(
-            transport.borrow(),
+            transport.as_ref(),
             &root,
             &timestamp,
             &datastore,
@@ -254,7 +254,7 @@ impl Repository {
 
         // 4. Download the targets metadata file
         let targets = load_targets(
-            transport.borrow(),
+            transport.as_ref(),
             &root,
             &snapshot,
             &datastore,

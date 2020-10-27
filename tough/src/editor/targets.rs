@@ -386,7 +386,7 @@ impl TargetsEditor {
                     url: metadata_base_url,
                 })?;
         let reader = Box::new(fetch_max_size(
-            transport.borrow(),
+            transport,
             role_url,
             limits.max_targets_size,
             "max targets limit",
