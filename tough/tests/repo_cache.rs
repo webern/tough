@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use test_utils::{dir_url, test_data};
-use tough::{ExpirationEnforcement, Limits, Repository, Settings};
+use tough::{ExpirationEnforcement, Limits, Options, Repository, Settings};
 
 mod test_utils;
 
@@ -33,15 +33,12 @@ impl RepoPaths {
 
 fn load_tuf_reference_impl(paths: &RepoPaths) -> Repository {
     Repository::load(
-        Box::new(tough::FilesystemTransport),
         Settings {
             root: &mut paths.root(),
-            datastore: None,
             metadata_base_url: paths.metadata_base_url.clone(),
             targets_base_url: paths.targets_base_url.clone(),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
         },
+        Options::default(),
     )
     .unwrap()
 }
