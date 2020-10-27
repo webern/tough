@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 use ring::rand::SystemRandom;
 use serde_json::Value;
 use snafu::{OptionExt, ResultExt};
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::num::NonZeroU64;
 use std::path::Path;
@@ -374,7 +374,7 @@ impl TargetsEditor {
             .transport
             .as_ref()
             .context(error::MissingTransport)?
-            .borrow();
+            .as_ref();
 
         let metadata_base_url = parse_url(metadata_url)?;
         // path to updated metadata
