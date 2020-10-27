@@ -1,3 +1,7 @@
+#[cfg(feature = "http")]
+use crate::ClientSettings;
+#[cfg(feature = "http")]
+use crate::HttpTransport;
 use serde::export::Formatter;
 use std::fmt::{Debug, Display};
 use std::io::{ErrorKind, Read};
@@ -137,5 +141,75 @@ impl Transport for FilesystemTransport {
 
     fn boxed_clone(&self) -> Box<dyn Transport> {
         Box::new(*self)
+    }
+}
+
+// =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
+
+/// A Transport that provides support for both local files and, if the `http` feature is enabled,
+/// HTTP-transported files.
+#[derive(Debug, Clone, Copy)]
+pub struct DefaultTransport {
+    file: FilesystemTransport,
+    #[cfg(feature = "http")]
+    http: HttpTransport,
+}
+
+impl Default for DefaultTransport {
+    fn default() -> Self {
+        Self {
+            file: FilesystemTransport,
+            #[cfg(feature = "http")]
+            http: HttpTransport::default(),
+        }
+    }
+}
+
+impl DefaultTransport {
+    /// Creates a new `DefaultTransport`. Same as `default()`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "http")]
+impl DefaultTransport {
+    /// Create a new `DefaultTransport` using the given HTTP `ClientSettings`.
+    #[allow(dead_code)]
+    pub fn from_http_settings(settings: ClientSettings) -> Self {
+        Self {
+            file: FilesystemTransport,
+            http: HttpTransport::from_settings(settings),
+        }
+    }
+}
+
+impl Transport for DefaultTransport {
+    fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
+        match url.scheme() {
+            "file" => self.file.fetch(url),
+            "http" | "https" => self.handle_http(url),
+            _ => Err(TransportError::unsupported_url(url)),
+        }
+    }
+
+    fn boxed_clone(&self) -> Box<dyn Transport> {
+        Box::new(*self)
+    }
+}
+
+impl DefaultTransport {
+    #[cfg(not(feature = "http"))]
+    fn handle_http(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
+        Err(TransportError::new(
+            TransportErrorKind::UnsupportedUrlScheme,
+            url,
+            "The library was not compiled with the http feature enabled.",
+        ))
+    }
+
+    #[cfg(feature = "http")]
+    fn handle_http(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
+        self.http.fetch(url)
     }
 }
