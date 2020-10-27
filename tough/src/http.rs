@@ -69,7 +69,11 @@ impl Transport for HttpTransport {
     /// returned `RetryRead` will also retry as necessary per the `ClientSettings`.
     fn fetch(&self, url: Url) -> Result<Box<dyn Read>, TransportError> {
         let mut r = RetryState::new(self.settings.initial_backoff);
-        Ok(Box::new(fetch_with_retries(&mut r, &self.settings, &url)?))
+        Ok(Box::new(fetch_with_retries_v2(
+            &mut r,
+            &self.settings,
+            &url,
+        )?))
     }
 
     fn boxed_clone(&self) -> Box<dyn Transport> {
@@ -111,7 +115,7 @@ impl Read for RetryRead {
             // wait, then retry the request (with a range header).
             std::thread::sleep(self.retry_state.wait);
             let new_retry_read =
-                fetch_with_retries(&mut self.retry_state, &self.settings, &self.url)
+                fetch_with_retries_v2(&mut self.retry_state, &self.settings, &self.url)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
             // the new fetch succeeded so we need to replace our read object with the new one.
             self.response = new_retry_read.response;
@@ -254,6 +258,99 @@ fn fetch_with_retries(
     }
 }
 
+/// Sends a `GET` request to the `url`. Retries the request as necessary per the `ClientSettings`.
+fn fetch_with_retries_v2(
+    r: &mut RetryState,
+    cs: &ClientSettings,
+    url: &Url,
+) -> Result<RetryRead, TransportError> {
+    trace!("beginning fetch for '{}'", url);
+    // create a reqwest client
+    let client = ClientBuilder::new()
+        .timeout(cs.timeout)
+        .connect_timeout(cs.connect_timeout)
+        .build()
+        .map_err(|e| TransportError::new(Kind::Failure, &url, e))?;
+    // TODO - variant for this error type? .context(error::HttpClientBuild { url: url.clone() })?;
+    // retry loop
+    loop {
+        // build the request
+        let request = build_request(&client, r.next_byte, &url)?;
+
+        // send the request, inspect the result and convert to an HttpResult
+        let http_result: HttpResult = client.execute(request).into();
+
+        match http_result {
+            HttpResult::Ok(response) => {
+                trace!("{:?} - returning from successful fetch", r);
+                return Ok(RetryRead {
+                    retry_state: *r,
+                    settings: *cs,
+                    response,
+                    url: url.clone(),
+                });
+            }
+            HttpResult::Fatal(err) => {
+                trace!("{:?} - returning fatal error from fetch: {}", r, err);
+                return Err(TransportError::new(Kind::Failure, &url, err));
+            }
+            HttpResult::FatalFileNotFound(err) => {
+                trace!("{:?} - returning file not found from fetch: {}", r, err);
+                return Err(TransportError::new(Kind::FileNotFound, &url, err));
+            }
+            HttpResult::Retryable(err) => {
+                trace!("{:?} - retryable error: {}", r, err);
+                if r.current_try >= cs.tries - 1 {
+                    debug!("{:?} - returning failure, no more retries: {}", r, err);
+                    return Err(TransportError::new(Kind::Failure, &url, err));
+                    // TODO - variant for this error type? .context(error::HttpRetries { url: url.clone(), tries: cs.tries, });
+                }
+            }
+        }
+
+        // let result = match client.execute(request) {
+        //     Ok(response) => match response.error_for_status() {
+        //         Ok(response) => Ok(response),
+        //         Err(err) => Err(err),
+        //     },
+        //     Err(err) => Err(err),
+        // };
+        //
+        // // check the result, if it is a non-retryable error, return the error. if it is a retryable-
+        // // error, assign it to `retry_err`. if there is no error then return the read.
+        // let retry_err = match result {
+        //     Ok(reqwest_read) => {
+        //         return Ok(RetryRead {
+        //             retry_state: *r,
+        //             settings: *cs,
+        //             response: reqwest_read,
+        //             url: url.clone(),
+        //         });
+        //     }
+        //     Err(err) => {
+        //         debug!("{:?} - error during fetch: {}", r, err);
+        //         // if it's a status code error other than 5XX, return the error
+        //         if let Some(status) = err.status() {
+        //             if !status.is_success() && !status.is_server_error() {
+        //                 return Err(TransportError::new(Kind::Failure, &url, err));
+        //                 // TODO - variant for this error type? .context(error::HttpFetch { url: url.clone() });
+        //             }
+        //         }
+        //         // we will retry if possible, otherwise we will return this err.
+        //         err
+        //     }
+        // };
+        //
+        // // increment the retry state and continue trying unless we are out of tries
+        // if r.current_try >= cs.tries - 1 {
+        //     return Err(TransportError::new(Kind::Failure, &url, retry_err));
+        //     // TODO - variant for this error type? .context(error::HttpRetries { url: url.clone(), tries: cs.tries, });
+        // }
+        r.increment(&cs);
+        std::thread::sleep(r.wait);
+    }
+}
+
 struct FetchResult(Result<reqwest::Response, reqwest::Error>);
 
 impl Into<FetchResult> for Result<reqwest::Response, reqwest::Error> {
@@ -275,38 +372,62 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
     fn into(self) -> HttpResult {
         match self {
             Ok(response) => {
-                // check the status code of the response
-                match response.error_for_status() {
-                    Ok(ok) => {
-                        // http status is ok. return early from this function with happiness
-                        HttpResult::Ok(ok)
-                    }
-                    // http status is an error
-                    Err(err) => match err.status() {
-                        None => {
-                            // this shouldn't happen, we received this err from the err_for_status
-                            // function, so we would expect the err to have a status. oh well, we
-                            // cannot reasonably consider this a retryable error.
-                            HttpResult::Fatal(err)
-                        }
-                        Some(status) => {
-                            if !status.is_success() && status.is_server_error() {
-                                HttpResult::Retryable(err)
-                            } else {
-                                match status.as_u16() {
-                                    403 | 404 => HttpResult::FatalFileNotFound(err),
-                                    _ => HttpResult::Fatal(err),
-                                }
-                            }
-                        }
-                    },
-                }
+                trace!("response received");
+                // checks the status code of the response for errors
+                response.into()
             }
-            // something error other than an http status code occurred, assume non-retryable
-            Err(err) => HttpResult::Fatal(err),
+            // an error occurred before the HTTP header could be read
+            Err(err) => {
+                trace!("retryable error during fetch: {}", err);
+                HttpResult::Retryable(err)
+            }
         }
     }
 }
+
+impl Into<HttpResult> for reqwest::blocking::Response {
+    fn into(self) -> HttpResult {
+        match self.error_for_status() {
+            Ok(ok) => {
+                trace!("response is success");
+                // http status is ok. return early from this function with happiness
+                HttpResult::Ok(ok)
+            }
+            // http status is an error
+            Err(err) => match err.status() {
+                // trace!("response is error: {}", err);
+                None => {
+                    // this shouldn't happen, we received this err from the err_for_status
+                    // function, so we would expect the err to have a status. oh well, we
+                    // cannot reasonably consider this a retryable error.
+                    trace!("error is fatal (no status): {}", err);
+                    HttpResult::Fatal(err)
+                }
+                Some(status) => {
+                    if !status.is_success() && status.is_server_error() {
+                        trace!("error is retryable: {}", err);
+                        HttpResult::Retryable(err)
+                    } else {
+                        match status.as_u16() {
+                            403 | 404 => {
+                                trace!("error is file not found: {}", err);
+                                HttpResult::FatalFileNotFound(err)
+                            }
+                            _ => {
+                                trace!("error is fatal (status): {}", err);
+                                HttpResult::Fatal(err)
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    }
+}
+
+// fn handle_status_error(err: reqwest::Error) -> HttpResult {
+//
+// }
 
 fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request, TransportError> {
     if next_byte == 0 {
