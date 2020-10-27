@@ -563,7 +563,7 @@ fn parse_url(url: &str) -> Result<Url> {
     Url::parse(&url).context(error::ParseUrl { url })
 }
 
-/// Clone needs to be implemented by handed because we hold a `Box<dyn Transport>`.
+/// Clone needs to be implemented by hand because we hold a `Box<dyn Transport>`.
 impl Clone for TargetsEditor {
     fn clone(&self) -> Self {
         Self {

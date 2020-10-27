@@ -1038,10 +1038,10 @@ mod tests {
     }
 }
 
+/// Clone needs to be implemented by hand because we hold a `Box<dyn Transport>`.
 impl Clone for Repository {
     fn clone(&self) -> Self {
         Self {
-            // the transport trait cannot include the clone trait, so we need to this boxed_clone function
             transport: self.transport.boxed_clone(),
             consistent_snapshot: Clone::clone(&self.consistent_snapshot),
             datastore: Clone::clone(&self.datastore),
