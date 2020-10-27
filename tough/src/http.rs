@@ -294,7 +294,7 @@ fn fetch_with_retries_v2(
                 trace!("{:?} - returning fatal error from fetch: {}", r, err);
                 return Err(TransportError::new(Kind::Failure, &url, err));
             }
-            HttpResult::FatalFileNotFound(err) => {
+            HttpResult::FileNotFound(err) => {
                 trace!("{:?} - returning file not found from fetch: {}", r, err);
                 return Err(TransportError::new(Kind::FileNotFound, &url, err));
             }
@@ -359,15 +359,22 @@ impl Into<FetchResult> for Result<reqwest::Response, reqwest::Error> {
     }
 }
 
-/// In refactoring the fetch function it was found that the complexity lies primarily with decoding
-/// the `Result` from the GET request.
+/// Much of the complexity in the `fetch_with_retries` function is in deciphering the `Result` we
+/// get from the reqwest client `execute` function. Using this enum we categorize the states of that
+/// `Result` into the categories that we need to understand.
 enum HttpResult {
+    /// We got a response with an HTTP code that indicates success.
     Ok(reqwest::blocking::Response),
+    /// We got an `Error` (other than file-not-found) which we will not retry.
     Fatal(reqwest::Error),
-    FatalFileNotFound(reqwest::Error),
+    /// The file could not be found (HTTP status 403 or 404).
+    FileNotFound(reqwest::Error),
+    /// We received an `Error`, or we received an HTTP response code that we can retry.
     Retryable(reqwest::Error),
 }
 
+/// Takes the `Result` type from the reqwest client `execute` function, and categorizes it into an
+/// `HttpResult` variant.
 impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
     fn into(self) -> HttpResult {
         match self {
@@ -376,8 +383,8 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
                 // checks the status code of the response for errors
                 parse_response(response)
             }
-            // an error occurred before the HTTP header could be read
             Err(err) => {
+                // an error occurred before the HTTP header could be read
                 trace!("retryable error during fetch: {}", err);
                 HttpResult::Retryable(err)
             }
@@ -385,30 +392,7 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
     }
 }
 
-// impl Into<HttpResult> for reqwest::blocking::Response {
-//     fn into(self) -> HttpResult {
-//         match self.error_for_status() {
-//             Ok(ok) => {
-//                 trace!("response is success");
-//                 // http status is ok. return early from this function with happiness
-//                 HttpResult::Ok(ok)
-//             }
-//             // http status is an error
-//             Err(err) => match err.status() {
-//                 // trace!("response is error: {}", err);
-//                 None => {
-//                     // this shouldn't happen, we received this err from the err_for_status
-//                     // function, so we would expect the err to have a status. oh well, we
-//                     // cannot reasonably consider this a retryable error.
-//                     trace!("error is fatal (no status): {}", err);
-//                     HttpResult::Fatal(err)
-//                 }
-//                 Some(status) => convert_status_err(err, status),
-//             },
-//         }
-//     }
-// }
-
+/// Checks the HTTP response code and converts a non-successful response code to an error.
 fn parse_response(response: reqwest::blocking::Response) -> HttpResult {
     match response.error_for_status() {
         Ok(ok) => {
@@ -418,11 +402,9 @@ fn parse_response(response: reqwest::blocking::Response) -> HttpResult {
         }
         // http status is an error
         Err(err) => match err.status() {
-            // trace!("response is error: {}", err);
             None => {
-                // this shouldn't happen, we received this err from the err_for_status
-                // function, so we would expect the err to have a status. oh well, we
-                // cannot reasonably consider this a retryable error.
+                // this shouldn't happen, we received this err from the err_for_status function,
+                // so we the err should have a status. we cannot consider this a retryable error.
                 trace!("error is fatal (no status): {}", err);
                 HttpResult::Fatal(err)
             }
@@ -431,6 +413,7 @@ fn parse_response(response: reqwest::blocking::Response) -> HttpResult {
     }
 }
 
+/// Categorizes the the error type based on its HTTP code.
 fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpResult {
     if status.is_server_error() {
         trace!("error is retryable: {}", err);
@@ -440,7 +423,7 @@ fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpRes
             // some services (like S3) return a 403 when the file is not found
             403 | 404 => {
                 trace!("error is file not found: {}", err);
-                HttpResult::FatalFileNotFound(err)
+                HttpResult::FileNotFound(err)
             }
             _ => {
                 trace!("error is fatal (status): {}", err);
@@ -450,10 +433,7 @@ fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpRes
     }
 }
 
-// fn handle_status_error(err: reqwest::Error) -> HttpResult {
-//
-// }
-
+/// Builds a GET request. If `next_byte` is greater than zero, adds a byte range header to the request.
 fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request, TransportError> {
     if next_byte == 0 {
         let request = client
