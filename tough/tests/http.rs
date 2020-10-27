@@ -81,7 +81,6 @@ mod http_happy {
 #[cfg(feature = "integ")]
 mod http_integ {
     use crate::test_utils::test_data;
-    use log::LevelFilter;
     use std::fs::File;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
