@@ -623,11 +623,6 @@ impl RepositoryEditor {
         Ok(self)
     }
 
-    // fn check_transport(&self) -> Result<()> {
-    //     ensure!(self.transport.is_some(), crate::error::MissingTransport);
-    //     Ok(())
-    // }
-
     // =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=   =^..^=
 
     /// Build the `Snapshot` struct
