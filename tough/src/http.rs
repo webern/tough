@@ -361,16 +361,10 @@ fn build_request(
 mod http_error {
     #![allow(clippy::default_trait_access)]
 
-    // use crate::schema;
-    // use crate::schema::RoleType;
-    // use chrono::{DateTime, Utc};
     use crate::transport::Kind;
     use crate::TransportError;
     use snafu::Snafu;
     use std::io::{Error, ErrorKind};
-    // use std::io;
-    // use std::path::PathBuf;
-    // use url::Url;
 
     /// The error type for the HTTP transport module.
     #[derive(Debug, Snafu)]
