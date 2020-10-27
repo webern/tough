@@ -374,7 +374,7 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
             Ok(response) => {
                 trace!("response received");
                 // checks the status code of the response for errors
-                response.into()
+                parse_response(response)
             }
             // an error occurred before the HTTP header could be read
             Err(err) => {
@@ -385,42 +385,67 @@ impl Into<HttpResult> for Result<reqwest::blocking::Response, reqwest::Error> {
     }
 }
 
-impl Into<HttpResult> for reqwest::blocking::Response {
-    fn into(self) -> HttpResult {
-        match self.error_for_status() {
-            Ok(ok) => {
-                trace!("response is success");
-                // http status is ok. return early from this function with happiness
-                HttpResult::Ok(ok)
+// impl Into<HttpResult> for reqwest::blocking::Response {
+//     fn into(self) -> HttpResult {
+//         match self.error_for_status() {
+//             Ok(ok) => {
+//                 trace!("response is success");
+//                 // http status is ok. return early from this function with happiness
+//                 HttpResult::Ok(ok)
+//             }
+//             // http status is an error
+//             Err(err) => match err.status() {
+//                 // trace!("response is error: {}", err);
+//                 None => {
+//                     // this shouldn't happen, we received this err from the err_for_status
+//                     // function, so we would expect the err to have a status. oh well, we
+//                     // cannot reasonably consider this a retryable error.
+//                     trace!("error is fatal (no status): {}", err);
+//                     HttpResult::Fatal(err)
+//                 }
+//                 Some(status) => convert_status_err(err, status),
+//             },
+//         }
+//     }
+// }
+
+fn parse_response(response: reqwest::blocking::Response) -> HttpResult {
+    match response.error_for_status() {
+        Ok(ok) => {
+            trace!("response is success");
+            // http status is ok. return early from this function with happiness
+            HttpResult::Ok(ok)
+        }
+        // http status is an error
+        Err(err) => match err.status() {
+            // trace!("response is error: {}", err);
+            None => {
+                // this shouldn't happen, we received this err from the err_for_status
+                // function, so we would expect the err to have a status. oh well, we
+                // cannot reasonably consider this a retryable error.
+                trace!("error is fatal (no status): {}", err);
+                HttpResult::Fatal(err)
             }
-            // http status is an error
-            Err(err) => match err.status() {
-                // trace!("response is error: {}", err);
-                None => {
-                    // this shouldn't happen, we received this err from the err_for_status
-                    // function, so we would expect the err to have a status. oh well, we
-                    // cannot reasonably consider this a retryable error.
-                    trace!("error is fatal (no status): {}", err);
-                    HttpResult::Fatal(err)
-                }
-                Some(status) => {
-                    if !status.is_success() && status.is_server_error() {
-                        trace!("error is retryable: {}", err);
-                        HttpResult::Retryable(err)
-                    } else {
-                        match status.as_u16() {
-                            403 | 404 => {
-                                trace!("error is file not found: {}", err);
-                                HttpResult::FatalFileNotFound(err)
-                            }
-                            _ => {
-                                trace!("error is fatal (status): {}", err);
-                                HttpResult::Fatal(err)
-                            }
-                        }
-                    }
-                }
-            },
+            Some(status) => parse_status_err(err, status),
+        },
+    }
+}
+
+fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpResult {
+    if status.is_server_error() {
+        trace!("error is retryable: {}", err);
+        HttpResult::Retryable(err)
+    } else {
+        match status.as_u16() {
+            // some services (like S3) return a 403 when the file is not found
+            403 | 404 => {
+                trace!("error is file not found: {}", err);
+                HttpResult::FatalFileNotFound(err)
+            }
+            _ => {
+                trace!("error is fatal (status): {}", err);
+                HttpResult::Fatal(err)
+            }
         }
     }
 }
