@@ -21,7 +21,7 @@
 #![forbid(missing_debug_implementations, missing_copy_implementations)]
 #![deny(rust_2018_idioms)]
 // missing_docs is on its own line to make it easy to comment out when making changes.
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 #![warn(clippy::pedantic)]
 #![allow(
     clippy::module_name_repetitions,
@@ -223,7 +223,7 @@ impl Repository {
 
         // 0. Load the trusted root metadata file + 1. Update the root metadata file
         let root = load_root(
-            transport.as_ref(),
+            transport.borrow(),
             settings.root,
             &datastore,
             settings.limits.max_root_size,
@@ -1041,6 +1041,7 @@ mod tests {
 impl Clone for Repository {
     fn clone(&self) -> Self {
         Self {
+            // the transport trait cannot include the clone trait, so we need to this boxed_clone function
             transport: self.transport.boxed_clone(),
             consistent_snapshot: Clone::clone(&self.consistent_snapshot),
             datastore: Clone::clone(&self.datastore),

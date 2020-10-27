@@ -210,7 +210,7 @@ fn fetch_with_retries(
         // build the request
         let request = build_request(&client, r.next_byte, &url)?;
 
-        // send the request, inspect the result and convert to an HttpResult
+        // send the GET request, then categories the outcome by converting to an HttpResult.
         let http_result: HttpResult = client.execute(request).into();
 
         match http_result {
@@ -248,16 +248,8 @@ fn fetch_with_retries(
     }
 }
 
-struct FetchResult(Result<reqwest::Response, reqwest::Error>);
-
-impl Into<FetchResult> for Result<reqwest::Response, reqwest::Error> {
-    fn into(self) -> FetchResult {
-        FetchResult(self)
-    }
-}
-
-/// Much of the complexity in the `fetch_with_retries` function is in deciphering the `Result` we
-/// get from the reqwest client `execute` function. Using this enum we categorize the states of that
+/// Much of the complexity in the `fetch_with_retries` function is in deciphering the `Result`
+/// we get from `reqwest::Client::execute`. Using this enum we categorize the states of the
 /// `Result` into the categories that we need to understand.
 enum HttpResult {
     /// We got a response with an HTTP code that indicates success.
@@ -301,7 +293,7 @@ fn parse_response(response: reqwest::blocking::Response) -> HttpResult {
         Err(err) => match err.status() {
             None => {
                 // this shouldn't happen, we received this err from the err_for_status function,
-                // so we the err should have a status. we cannot consider this a retryable error.
+                // so the error should have a status. we cannot consider this a retryable error.
                 trace!("error is fatal (no status): {}", err);
                 HttpResult::Fatal(err)
             }

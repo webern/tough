@@ -38,7 +38,8 @@ pub trait Transport: Debug {
 ///
 /// # Why
 ///
-/// Some TUF operations need to know if the [`Transport`] failure. In particular, for example:
+/// Some TUF operations need to know if a [`Transport`] failure is a result of a file not being
+/// found. In particular:
 /// > 5.1.2. Try downloading version N+1 of the root metadata file `[...]` If this file is not
 /// > available `[...]` then go to step 5.1.9.
 ///
@@ -47,10 +48,10 @@ pub trait Transport: Debug {
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
 pub enum Kind {
-    /// The file cannot be found.
-    FileNotFound,
     /// The trait does not handle the URL scheme named in `String`. e.g. `file://` or `http://`.
     BadUrlScheme,
+    /// The file cannot be found.
+    FileNotFound,
     /// The transport failed for any other reason, e.g. IO error, HTTP broken pipe, etc.
     Failure,
 }
@@ -80,7 +81,7 @@ impl TransportError {
         }
     }
 
-    /// Creates a consistent [`TransportError`] for reporting an unhandled URL type.
+    /// Creates a [`TransportError`] for reporting an unhandled URL type.
     pub fn bad_url_scheme<S: AsRef<str>>(url: S) -> Self {
         TransportError::new(
             Kind::BadUrlScheme,
@@ -98,7 +99,7 @@ impl std::error::Error for TransportError {
     }
 }
 
-/// [`TransportError`] implements the standard error interface.
+/// [`TransportError`] implements display, part of the standard error interface.
 impl Display for TransportError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
