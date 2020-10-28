@@ -156,7 +156,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             transport: Box::new(DefaultTransport::new()),
-            ..Default::default()
+            ..Options::default()
         }
     }
 }
