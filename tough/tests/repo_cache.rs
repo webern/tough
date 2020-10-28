@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use test_utils::{dir_url, test_data};
-use tough::{ExpirationEnforcement, Limits, Repository, Settings};
+use tough::{Repository, Settings};
 
 mod test_utils;
 
@@ -32,17 +32,11 @@ impl RepoPaths {
 }
 
 fn load_tuf_reference_impl(paths: &RepoPaths) -> Repository {
-    Repository::load(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: &mut paths.root(),
-            datastore: None,
-            metadata_base_url: paths.metadata_base_url.clone(),
-            targets_base_url: paths.targets_base_url.clone(),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    Repository::load(Settings {
+        root: &mut paths.root(),
+        metadata_base_url: paths.metadata_base_url.clone(),
+        targets_base_url: paths.targets_base_url.clone(),
+    })
     .unwrap()
 }
 
@@ -66,17 +60,11 @@ fn test_repo_cache_all_targets() {
     .unwrap();
 
     // check that we can load the copied repo.
-    let copied_repo = Repository::load(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: repo_paths.root(),
-            datastore: None,
-            metadata_base_url: dir_url(&metadata_destination),
-            targets_base_url: dir_url(&targets_destination),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let copied_repo = Repository::load(Settings {
+        root: repo_paths.root(),
+        metadata_base_url: dir_url(&metadata_destination),
+        targets_base_url: dir_url(&targets_destination),
+    })
     .unwrap();
 
     // the copied repo should have file1 and file2 (i.e. all of targets).
@@ -120,17 +108,11 @@ fn test_repo_cache_list_of_two_targets() {
     .unwrap();
 
     // check that we can load the copied repo.
-    let copied_repo = Repository::load(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: repo_paths.root(),
-            datastore: None,
-            metadata_base_url: dir_url(&metadata_destination),
-            targets_base_url: dir_url(&targets_destination),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let copied_repo = Repository::load(Settings {
+        root: repo_paths.root(),
+        metadata_base_url: dir_url(&metadata_destination),
+        targets_base_url: dir_url(&targets_destination),
+    })
     .unwrap();
 
     // the copied repo should have file1 and file2 (i.e. all of the listed targets).
@@ -174,17 +156,11 @@ fn test_repo_cache_some() {
     .unwrap();
 
     // check that we can load the copied repo.
-    let copied_repo = Repository::load(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: repo_paths.root(),
-            datastore: None,
-            metadata_base_url: dir_url(&metadata_destination),
-            targets_base_url: dir_url(&targets_destination),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let copied_repo = Repository::load(Settings {
+        root: repo_paths.root(),
+        metadata_base_url: dir_url(&metadata_destination),
+        targets_base_url: dir_url(&targets_destination),
+    })
     .unwrap();
 
     // the copied repo should have file2 but not file1 (i.e. only the listed targets).
