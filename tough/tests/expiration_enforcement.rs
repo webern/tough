@@ -5,7 +5,7 @@ use std::fs::File;
 use test_utils::{dir_url, test_data};
 use tough::error::Error::ExpiredMetadata;
 use tough::schema::RoleType;
-use tough::{Options, Repository, Settings};
+use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
 
 mod test_utils;
 
@@ -16,12 +16,15 @@ fn test_expiration_enforcement_safe() {
     let base = test_data().join("expired-repository");
 
     let result = Repository::load(
+        Box::new(FilesystemTransport),
         Settings {
             root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
+            datastore: None,
             metadata_base_url: dir_url(base.join("metadata")),
             targets_base_url: dir_url(base.join("targets")),
+            limits: Limits::default(),
+            expiration_enforcement: ExpirationEnforcement::Safe,
         },
-        Options::default(),
     );
 
     if let Err(err) = result {
@@ -46,12 +49,15 @@ fn test_expiration_enforcement_safe() {
 fn test_expiration_enforcement_unsafe() {
     let base = test_data().join("expired-repository");
     let result = Repository::load(
+        Box::new(FilesystemTransport),
         Settings {
             root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
+            datastore: None,
             metadata_base_url: dir_url(base.join("metadata")),
             targets_base_url: dir_url(base.join("targets")),
+            limits: Limits::default(),
+            expiration_enforcement: ExpirationEnforcement::Unsafe,
         },
-        Options::default(),
     );
     assert!(result.is_ok())
 }
