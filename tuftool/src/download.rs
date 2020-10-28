@@ -8,8 +8,7 @@ use std::io::{self};
 use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-use tough::http::HttpTransport;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
+use tough::{ExpirationEnforcement, Options, Repository, Settings};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
@@ -100,31 +99,26 @@ impl DownloadArgs {
         };
 
         // load repository
-        let settings = Settings {
-            root: File::open(&root_path).context(error::OpenRoot { path: &root_path })?,
-            datastore: None,
-            metadata_base_url: self.metadata_base_url.to_string(),
-            targets_base_url: self.targets_base_url.to_string(),
-            limits: Limits {
-                ..tough::Limits::default()
+        let repository = Repository::load_with_options(
+            Settings {
+                root: File::open(&root_path).context(error::OpenRoot { path: &root_path })?,
+                metadata_base_url: &self.metadata_base_url,
+                targets_base_url: &self.targets_base_url,
             },
-            expiration_enforcement: if self.allow_expired_repo {
-                expired_repo_warning(&self.outdir);
-                ExpirationEnforcement::Unsafe
-            } else {
-                ExpirationEnforcement::Safe
+            Options {
+                expiration_enforcement: if self.allow_expired_repo {
+                    expired_repo_warning(&self.outdir);
+                    ExpirationEnforcement::Unsafe
+                } else {
+                    ExpirationEnforcement::Safe
+                },
+                ..Options::default()
             },
-        };
-        if self.metadata_base_url.scheme() == "file" {
-            let repository = Repository::load(Box::new(FilesystemTransport), settings)
-                .context(error::Metadata)?;
-            handle_download(&repository, &self.outdir, &self.target_names)?;
-        } else {
-            let repository = Repository::load(Box::new(HttpTransport::new()), settings)
-                .context(error::Metadata)?;
-            handle_download(&repository, &self.outdir, &self.target_names)?;
-        };
-        Ok(())
+        )
+        .context(error::RepoLoad)?;
+
+        // download targets
+        handle_download(&repository, &self.outdir, &self.target_names)
     }
 }
 
