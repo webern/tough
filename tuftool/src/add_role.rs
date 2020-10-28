@@ -1,20 +1,18 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::common::load_metadata_repo;
 use crate::datetime::parse_datetime;
 use crate::error::{self, Result};
 use crate::source::parse_key_source;
 use chrono::{DateTime, Utc};
 use snafu::{OptionExt, ResultExt};
-use std::fs::File;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tough::editor::{targets::TargetsEditor, RepositoryEditor};
-use tough::http::HttpTransport;
 use tough::key_source::KeySource;
 use tough::schema::PathSet;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
@@ -89,7 +87,7 @@ pub(crate) struct AddRoleArgs {
 impl AddRoleArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
-        let repository = self.load_repo()?;
+        let repository = load_metadata_repo(&self.root, &self.metadata_base_url)?;
         // if sign_all use Repository Editor to sign the entire repo if not use targets editor
         if self.sign_all {
             // Load the `Repository` into the `RepositoryEditor`
@@ -211,16 +209,5 @@ impl AddRoleArgs {
             })?;
 
         Ok(())
-    }
-
-    fn load_repo(&self) -> Result<Repository> {
-        // load the repo
-        // We don't do anything with targets so we pass a parseable, but fake URL
-        Repository::load_default(Settings {
-            root: File::open(&self.root).context(error::OpenRoot { path: &self.root })?,
-            metadata_base_url: &self.metadata_base_url,
-            targets_base_url: "file:///unused/path",
-        })
-        .context(error::RepoLoad)
     }
 }

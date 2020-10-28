@@ -8,8 +8,7 @@ use std::io::{self};
 use std::num::NonZeroU64;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-use tough::http::HttpTransport;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
+use tough::{Repository, Settings};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
@@ -86,26 +85,14 @@ impl DownloadArgs {
         };
 
         // load repository
-        let settings = Settings {
+        let repository = Repository::load_default(Settings {
             root: File::open(&root_path).context(error::OpenRoot { path: &root_path })?,
-            datastore: None,
             metadata_base_url: self.metadata_base_url.to_string(),
             targets_base_url: self.targets_base_url.to_string(),
-            limits: Limits {
-                ..tough::Limits::default()
-            },
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        };
-        if self.metadata_base_url.scheme() == "file" {
-            let repository = Repository::load_default(Box::new(FilesystemTransport), settings)
-                .context(error::Metadata)?;
-            handle_download(&repository, &self.outdir, &self.target_names)?;
-        } else {
-            let repository = Repository::load_default(Box::new(HttpTransport::new()), settings)
-                .context(error::Metadata)?;
-            handle_download(&repository, &self.outdir, &self.target_names)?;
-        };
-        Ok(())
+        })
+        .context(error::Metadata)?;
+        // download targets
+        handle_download(&repository, &self.outdir, &self.target_names)
     }
 }
 

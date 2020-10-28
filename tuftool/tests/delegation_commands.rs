@@ -9,7 +9,7 @@ use std::fs::File;
 use std::path::Path;
 use tempfile::TempDir;
 use test_utils::dir_url;
-use tough::{ExpirationEnforcement, Limits, Repository, Settings};
+use tough::{Repository, Settings};
 
 fn create_repo<P: AsRef<Path>>(repo_dir: P) {
     let timestamp_expiration = Utc::now().checked_add_signed(Duration::days(1)).unwrap();
@@ -143,17 +143,11 @@ fn create_add_role_command() {
     // Load the updated repo
     let updated_metadata_base_url = &dir_url(new_repo_dir.path().join("metadata"));
     let updated_targets_base_url = &dir_url(new_repo_dir.path().join("targets"));
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(&root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: updated_metadata_base_url.clone(),
-            targets_base_url: updated_targets_base_url.clone(),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(&root_json).unwrap(),
+        metadata_base_url: updated_metadata_base_url.clone(),
+        targets_base_url: updated_targets_base_url.clone(),
+    })
     .unwrap();
     // Make sure `A` is added as a role
     assert!(repo.delegated_role("A").is_some());
@@ -248,17 +242,11 @@ fn create_add_role_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: dir_url(update_out.path().join("metadata")),
-            targets_base_url: dir_url(update_out.path().join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(root_json).unwrap(),
+        metadata_base_url: dir_url(update_out.path().join("metadata")),
+        targets_base_url: dir_url(update_out.path().join("targets")),
+    })
     .unwrap();
 
     // Make sure `B` is added as a role
@@ -424,17 +412,11 @@ fn update_target_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: dir_url(update_out.path().join("metadata")),
-            targets_base_url: dir_url(update_out.path().join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(root_json).unwrap(),
+        metadata_base_url: dir_url(update_out.path().join("metadata")),
+        targets_base_url: dir_url(update_out.path().join("targets")),
+    })
     .unwrap();
 
     // Make sure we can read new target
@@ -682,17 +664,11 @@ fn add_key_command() {
         .success();
 
     // Load the updated repo
-    let _repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: dir_url(update_out.path().join("metadata")),
-            targets_base_url: dir_url(update_out.path().join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let _repo = Repository::load_default(Settings {
+        root: File::open(root_json).unwrap(),
+        metadata_base_url: dir_url(update_out.path().join("metadata")),
+        targets_base_url: dir_url(update_out.path().join("targets")),
+    })
     .unwrap();
 }
 
@@ -984,17 +960,11 @@ fn remove_role_command() {
     // Load the updated repo
     let updated_metadata_base_url = dir_url(new_repo_dir.path().join("metadata"));
     let updated_targets_base_url = dir_url(new_repo_dir.path().join("targets"));
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(&root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: updated_metadata_base_url.clone(),
-            targets_base_url: updated_targets_base_url,
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(&root_json).unwrap(),
+        metadata_base_url: updated_metadata_base_url.clone(),
+        targets_base_url: updated_targets_base_url,
+    })
     .unwrap();
     // Make sure `A` is added as a role
     assert!(repo.delegated_role("A").is_some());
@@ -1168,17 +1138,11 @@ fn remove_role_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: dir_url(update_out.path().join("metadata")),
-            targets_base_url: dir_url(update_out.path().join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(root_json).unwrap(),
+        metadata_base_url: dir_url(update_out.path().join("metadata")),
+        targets_base_url: dir_url(update_out.path().join("targets")),
+    })
     .unwrap();
 
     // Make sure `B` is removed
@@ -1268,17 +1232,11 @@ fn remove_role_recursive_command() {
 
     // Load the updated repo
     let updated_metadata_base_url = &dir_url(new_repo_dir.path().join("metadata"));
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(&root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: updated_metadata_base_url.clone(),
-            targets_base_url: dir_url(new_repo_dir.path().join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(&root_json).unwrap(),
+        metadata_base_url: updated_metadata_base_url.clone(),
+        targets_base_url: dir_url(new_repo_dir.path().join("targets")),
+    })
     .unwrap();
     // Make sure `A` is added as a role
     assert!(repo.delegated_role("A").is_some());
@@ -1453,17 +1411,11 @@ fn remove_role_recursive_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(root_json).unwrap(),
-            datastore: None,
-            metadata_base_url: dir_url(update_out.path().join("metadata")),
-            targets_base_url: dir_url(update_out.path().join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(root_json).unwrap(),
+        metadata_base_url: dir_url(update_out.path().join("metadata")),
+        targets_base_url: dir_url(update_out.path().join("targets")),
+    })
     .unwrap();
 
     // Make sure `A` and `B` are removed

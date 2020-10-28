@@ -1,20 +1,18 @@
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::common::load_metadata_repo;
 use crate::datetime::parse_datetime;
 use crate::error::{self, Result};
 use crate::source::parse_key_source;
 use chrono::{DateTime, Utc};
 use snafu::ResultExt;
 use std::collections::HashMap;
-use std::fs::File;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tough::editor::targets::TargetsEditor;
-use tough::http::HttpTransport;
 use tough::key_source::KeySource;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
@@ -56,13 +54,7 @@ pub(crate) struct AddKeyArgs {
 impl AddKeyArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
-        let repository = Repository::load_default(Settings {
-            root: File::open(&self.root).context(error::OpenRoot { path: &self.root })?,
-            metadata_base_url: &self.metadata_base_url,
-            // We don't do anything with targets
-            targets_base_url: "file://unused/url",
-        })
-        .context(error::RepoLoad)?;
+        let repository = load_metadata_repo(&self.root, &self.metadata_base_url)?;
         // create targets editor
         self.with_targets_editor(
             role,
