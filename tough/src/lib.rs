@@ -122,10 +122,10 @@ where
 
 /// Optional settings for loading a `Repository`, all of which have working defaults.
 #[derive(Debug)]
-pub struct Options<T: Transport + 'static> {
+pub struct Options {
     /// The `Transport` that will be used to retrieve files. Defaults to `DefaultTransport` which
     /// supports both file and HTTP.
-    pub transport: T,
+    pub transport: Box<dyn Transport>,
 
     /// Limits used when fetching repository metadata.
     ///
@@ -152,10 +152,10 @@ pub struct Options<T: Transport + 'static> {
     pub expiration_enforcement: ExpirationEnforcement,
 }
 
-impl Default for Options<DefaultTransport> {
+impl Default for Options {
     fn default() -> Self {
         Self {
-            transport: DefaultTransport::new(),
+            transport: Box::new(DefaultTransport::new()),
             ..Default::default()
         }
     }
@@ -249,12 +249,11 @@ impl Repository {
     ///
     /// `metadata_base_url` and `targets_base_url` are the HTTP(S) base URLs for where the client
     /// can find metadata (such as root.json) and targets (as listed in targets.json).
-    pub fn load<R, S1, S2, T>(settings: Settings<R, S1, S2>, options: Options<T>) -> Result<Self>
+    pub fn load<R, S1, S2>(settings: Settings<R, S1, S2>, options: Options) -> Result<Self>
     where
         R: Read,
         S1: AsRef<str>,
         S2: AsRef<str>,
-        T: Transport + 'static,
     {
         let metadata_base_url = parse_url(settings.metadata_base_url)?;
         let targets_base_url = parse_url(settings.targets_base_url)?;
@@ -262,7 +261,7 @@ impl Repository {
 
         // 0. Load the trusted root metadata file + 1. Update the root metadata file
         let root = load_root(
-            &options.transport,
+            options.transport.as_ref(),
             settings.root,
             &datastore,
             options.limits.max_root_size,
@@ -273,7 +272,7 @@ impl Repository {
 
         // 2. Download the timestamp metadata file
         let timestamp = load_timestamp(
-            &options.transport,
+            options.transport.as_ref(),
             &root,
             &datastore,
             options.limits.max_timestamp_size,
@@ -283,7 +282,7 @@ impl Repository {
 
         // 3. Download the snapshot metadata file
         let snapshot = load_snapshot(
-            &options.transport,
+            options.transport.as_ref(),
             &root,
             &timestamp,
             &datastore,
@@ -293,7 +292,7 @@ impl Repository {
 
         // 4. Download the targets metadata file
         let targets = load_targets(
-            &options.transport,
+            options.transport.as_ref(),
             &root,
             &snapshot,
             &datastore,
@@ -312,7 +311,7 @@ impl Repository {
             expires_iter.iter().min_by_key(|tup| tup.0).unwrap();
 
         Ok(Self {
-            transport: Box::new(options.transport),
+            transport: options.transport,
             consistent_snapshot: root.signed.consistent_snapshot,
             datastore,
             earliest_expiration: earliest_expiration.to_owned(),
