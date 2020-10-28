@@ -132,12 +132,13 @@ pub struct Options<T: Transport + 'static> {
     /// This parameter implements [`Default`]; see its documentation for details.
     pub limits: Limits,
 
-    /// Tough stores the most recently fetched timestamp, snapshot, and targets metadata files here
-    /// to detect version rollback attacks.
+    /// `datastore` is a directory on a persistent filesystem. This directory's contents store the
+    /// most recently fetched timestamp, snapshot, and targets metadata files to detect version
+    /// rollback attacks.
     ///
-    /// You may chose to provide a [`PathBuf`] to a directory on a persistent filesystem where
-    /// directory must exist prior to calling [`Repository::load`]. If given `None`, a temporary
-    /// directory will be created and cleaned up for for you.
+    /// You may chose to provide a [`PathBuf`] to a directory on a persistent filesystem, which must
+    /// exist prior to calling [`Repository::load`]. If given `None`, a temporary directory will be
+    /// created and cleaned up for for you.
     pub datastore: Option<PathBuf>,
 
     /// Metadata expiration enforcement.
@@ -165,6 +166,13 @@ impl Default for Options<DefaultTransport> {
 /// These limits are implemented to prevent endless data attacks. Clients must ensure these values
 /// are set higher than what would reasonably be expected by a repository, but not so high that the
 /// amount of data could interfere with the system.
+///
+/// `max_root_size` and `max_timestamp_size` are the maximum size for the `root.json` and
+/// `timestamp.json` files, respectively, downloaded from the repository. These must be
+/// sufficiently large such that future updates to your repository's key management strategy
+/// will still be supported, but sufficiently small such that you are protected against an
+/// endless data attack (defined by TUF as an attacker responding to clients with extremely
+/// large files that interfere with the client's system).
 ///
 /// The [`Default`] implementation sets the following values:
 /// * `max_root_size`: 1 MiB
@@ -201,7 +209,8 @@ impl Default for Limits {
 
 /// A TUF repository.
 ///
-/// You can create a `Repository` using the `load` method.
+/// You can create a `Repository` using the `load` method, or the `load_default`
+/// method (to use default options).
 #[derive(Debug)]
 pub struct Repository {
     transport: Box<dyn Transport>,
@@ -220,23 +229,23 @@ pub struct Repository {
 }
 
 impl Repository {
+    /// Load and verify TUF repository metadata with default [`Options`]. See
+    /// [`Repository::load`] for more into.
+    pub fn load_default<R, S1, S2>(settings: Settings<R, S1, S2>) -> Result<Self>
+    where
+        R: Read,
+        S1: AsRef<str>,
+        S2: AsRef<str>,
+    {
+        Self::load(settings, Options::default())
+    }
+
     /// Load and verify TUF repository metadata.
     ///
     /// `root` is a [`Read`]er for the trusted root metadata file, which you must ship with your
     /// software using an out-of-band process. It should be a copy of the most recent root.json
     /// from your repository. (It's okay if it becomes out of date later; the client establishes
     /// trust up to the most recent root.json file.)
-    ///
-    /// `datastore` is a [`Path`] to a directory on a persistent filesystem. This directory's
-    /// contents store the most recently fetched timestamp, snapshot, and targets metadata files.
-    /// The directory must exist prior to calling this method.
-    ///
-    /// `max_root_size` and `max_timestamp_size` are the maximum size for the root.json and
-    /// timestamp.json files, respectively, downloaded from the repository. These must be
-    /// sufficiently large such that future updates to your repository's key management strategy
-    /// will still be supported, but sufficiently small such that you are protected against an
-    /// endless data attack (defined by TUF as an attacker responding to clients with extremely
-    /// large files that interfere with the client's system).
     ///
     /// `metadata_base_url` and `targets_base_url` are the HTTP(S) base URLs for where the client
     /// can find metadata (such as root.json) and targets (as listed in targets.json).
