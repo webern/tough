@@ -104,7 +104,7 @@ fn update_command_without_new_targets() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load(
+    let repo = Repository::load_default(
         Box::new(tough::FilesystemTransport),
         Settings {
             root: File::open(root_json).unwrap(),
@@ -183,7 +183,7 @@ fn update_command_with_new_targets() {
         .success();
 
     // Load the updated repo.
-    let repo = Repository::load(
+    let repo = Repository::load_default(
         Box::new(tough::FilesystemTransport),
         Settings {
             root: File::open(root_json).unwrap(),

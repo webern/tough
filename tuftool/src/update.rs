@@ -111,14 +111,14 @@ impl UpdateArgs {
         // different types. This is why we can't assign the `Repository`
         // to a variable with the if statement.
         if self.metadata_base_url.scheme() == "file" {
-            let repository = Repository::load(Box::new(FilesystemTransport), settings)
+            let repository = Repository::load_default(Box::new(FilesystemTransport), settings)
                 .context(error::RepoLoad)?;
             self.with_editor(
                 RepositoryEditor::from_repo(&self.root, repository)
                     .context(error::EditorFromRepo { path: &self.root })?,
             )?;
         } else {
-            let repository = Repository::load(Box::new(HttpTransport::new()), settings)
+            let repository = Repository::load_default(Box::new(HttpTransport::new()), settings)
                 .context(error::RepoLoad)?;
             self.with_editor(
                 RepositoryEditor::from_repo(&self.root, repository)

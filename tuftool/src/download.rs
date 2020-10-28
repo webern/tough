@@ -97,11 +97,11 @@ impl DownloadArgs {
             expiration_enforcement: ExpirationEnforcement::Safe,
         };
         if self.metadata_base_url.scheme() == "file" {
-            let repository = Repository::load(Box::new(FilesystemTransport), settings)
+            let repository = Repository::load_default(Box::new(FilesystemTransport), settings)
                 .context(error::Metadata)?;
             handle_download(&repository, &self.outdir, &self.target_names)?;
         } else {
-            let repository = Repository::load(Box::new(HttpTransport::new()), settings)
+            let repository = Repository::load_default(Box::new(HttpTransport::new()), settings)
                 .context(error::Metadata)?;
             handle_download(&repository, &self.outdir, &self.target_names)?;
         };
