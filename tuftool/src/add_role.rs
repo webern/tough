@@ -14,7 +14,7 @@ use tough::editor::{targets::TargetsEditor, RepositoryEditor};
 use tough::http::HttpTransport;
 use tough::key_source::KeySource;
 use tough::schema::PathSet;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository};
+use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
@@ -89,65 +89,23 @@ pub(crate) struct AddRoleArgs {
 impl AddRoleArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
-        // We don't do anything with targets so we will use metadata url
-        let settings = tough::Settings {
-            root: File::open(&self.root).unwrap(),
-            datastore: None,
-            metadata_base_url: self.metadata_base_url.to_string(),
-            targets_base_url: self.metadata_base_url.to_string(),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        };
+        let repository = self.load_repo()?;
         // if sign_all use Repository Editor to sign the entire repo if not use targets editor
         if self.sign_all {
             // Load the `Repository` into the `RepositoryEditor`
-            // Loading a `Repository` with different `Transport`s results in
-            // different types. This is why we can't assign the `Repository`
-            // to a variable with the if statement.
-            if self.metadata_base_url.scheme() == "file" {
-                // TODO - rewrite
-                let repository = Repository::load_default(Box::new(FilesystemTransport), settings)
-                    .context(error::RepoLoad)?;
-                self.with_repo_editor(
-                    role,
-                    RepositoryEditor::from_repo(&self.root, repository)
-                        .context(error::EditorFromRepo { path: &self.root })?,
-                )?;
-            } else {
-                let repository = Repository::load_default(Box::new(HttpTransport::new()), settings)
-                    .context(error::RepoLoad)?;
-                self.with_repo_editor(
-                    role,
-                    RepositoryEditor::from_repo(&self.root, repository)
-                        .context(error::EditorFromRepo { path: &self.root })?,
-                )?;
-            }
+            self.with_repo_editor(
+                role,
+                RepositoryEditor::from_repo(&self.root, repository)
+                    .context(error::EditorFromRepo { path: &self.root })?,
+            )
         } else {
             // Load the `Repository` into the `TargetsEditor`
-            // Loading a `Repository` with different `Transport`s results in
-            // different types. This is why we can't assign the `Repository`
-            // to a variable with the if statement.
-            if self.metadata_base_url.scheme() == "file" {
-                // TODO rewrite
-                let repository = Repository::load_default(Box::new(FilesystemTransport), settings)
-                    .context(error::RepoLoad)?;
-                self.with_targets_editor(
-                    role,
-                    TargetsEditor::from_repo(repository, role)
-                        .context(error::EditorFromRepo { path: &self.root })?,
-                )?;
-            } else {
-                let repository = Repository::load_default(Box::new(HttpTransport::new()), settings)
-                    .context(error::RepoLoad)?;
-                self.with_targets_editor(
-                    role,
-                    TargetsEditor::from_repo(repository, role)
-                        .context(error::EditorFromRepo { path: &self.root })?,
-                )?;
-            }
+            self.with_targets_editor(
+                role,
+                TargetsEditor::from_repo(repository, role)
+                    .context(error::EditorFromRepo { path: &self.root })?,
+            )
         }
-
-        Ok(())
     }
 
     #[allow(clippy::option_if_let_else)]
@@ -253,5 +211,16 @@ impl AddRoleArgs {
             })?;
 
         Ok(())
+    }
+
+    fn load_repo(&self) -> Result<Repository> {
+        // load the repo
+        // We don't do anything with targets so we pass a parseable, but fake URL
+        Repository::load_default(Settings {
+            root: File::open(&self.root).context(error::OpenRoot { path: &self.root })?,
+            metadata_base_url: &self.metadata_base_url,
+            targets_base_url: "file:///unused/path",
+        })
+        .context(error::RepoLoad)
     }
 }
