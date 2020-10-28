@@ -156,7 +156,9 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             transport: Box::new(DefaultTransport::new()),
-            ..Options::default()
+            limits: Limits::default(),
+            datastore: None,
+            expiration_enforcement: ExpirationEnforcement::default(),
         }
     }
 }

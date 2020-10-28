@@ -94,9 +94,7 @@ mod http_integ {
     use std::fs::File;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
-    use tough::{
-        ClientSettings, ExpirationEnforcement, HttpTransport, Limits, Repository, Settings,
-    };
+    use tough::{ClientSettings, HttpTransport, Options, Repository, Settings};
 
     pub fn integ_dir() -> PathBuf {
         let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -157,15 +155,15 @@ mod http_integ {
                 backoff_factor: 1.5,
             });
             let root_path = tuf_reference_impl_root_json();
-            Repository::load_default(
-                Box::new(transport),
+            Repository::load(
                 Settings {
                     root: File::open(&root_path).unwrap(),
-                    datastore: None,
-                    metadata_base_url: "http://localhost:10103/metadata".into(),
-                    targets_base_url: "http://localhost:10103/targets".into(),
-                    limits: Limits::default(),
-                    expiration_enforcement: ExpirationEnforcement::Safe,
+                    metadata_base_url: "http://localhost:10103/metadata",
+                    targets_base_url: "http://localhost:10103/targets",
+                },
+                Options {
+                    transport: Box::new(transport),
+                    ..Options::default()
                 },
             )
             .unwrap();
