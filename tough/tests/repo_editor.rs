@@ -17,7 +17,7 @@ use tough::schema::decoded::Decoded;
 use tough::schema::decoded::Hex;
 use tough::schema::key::Key;
 use tough::schema::PathSet;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
+use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Options, Repository, Settings};
 
 mod test_utils;
 
@@ -65,15 +65,32 @@ fn targets_path() -> PathBuf {
 }
 
 fn load_tuf_reference_impl(paths: &mut RepoPaths) -> Repository {
-    Repository::load(
-        Box::new(tough::FilesystemTransport),
+    Repository::load_default(Settings {
+        root: paths.root(),
+        metadata_base_url: &paths.metadata_base_url,
+        targets_base_url: &paths.targets_base_url,
+    })
+    .unwrap()
+}
+
+fn load_tuf_reference_impl_with_options(paths: &mut RepoPaths) -> Repository {
+    let tempdir = TempDir::new().unwrap();
+    Repository::load_default(
         Settings {
             root: paths.root(),
-            datastore: None,
             metadata_base_url: paths.metadata_base_url.clone(),
             targets_base_url: paths.targets_base_url.clone(),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
+        },
+        Options {
+            transport: Box::new(FilesystemTransport),
+            limits: Limits {
+                max_root_size: 1000,
+                max_targets_size: 2000,
+                max_timestamp_size: 3000,
+                max_root_updates: 4000,
+            },
+            datastore: Some(tempdir.path().into()),
+            expiration_enforcement: ExpirationEnforcement::Unsafe,
         },
     )
     .unwrap()
@@ -234,7 +251,7 @@ fn create_sign_write_reload_repo() {
         .link_targets(&targets_path(), &targets_destination, PathExists::Skip)
         .is_ok());
     // Load the repo we just created
-    let _new_repo = Repository::load(
+    let _new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -285,7 +302,7 @@ fn create_role_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -341,7 +358,7 @@ fn create_role_flow() {
     // reload repo and verify that A role is included
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -370,7 +387,7 @@ fn create_role_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -414,7 +431,7 @@ fn create_role_flow() {
     // reload repo and add in A and B metadata and update snapshot
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -454,7 +471,7 @@ fn create_role_flow() {
 
     // reload repo and verify that A and B role are included
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -510,7 +527,7 @@ fn update_targets_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -566,7 +583,7 @@ fn update_targets_flow() {
     // reload repo and verify that A role is included
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -595,7 +612,7 @@ fn update_targets_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -639,7 +656,7 @@ fn update_targets_flow() {
     // reload repo and add in A and B metadata and update snapshot
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -679,7 +696,7 @@ fn update_targets_flow() {
 
     // reload repo and verify that A and B role are included
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -727,7 +744,7 @@ fn update_targets_flow() {
     // Add in edited A targets and update snapshot (update-repo)
     // load repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -769,7 +786,7 @@ fn update_targets_flow() {
 
     //load the updated repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -822,7 +839,7 @@ fn update_targets_flow() {
     // Add in edited A targets and update snapshot (update-repo)
     // load repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),
@@ -865,7 +882,7 @@ fn update_targets_flow() {
 
     //load the updated repo
     let root = root_path();
-    let new_repo = Repository::load(
+    let new_repo = Repository::load_default(
         Box::new(FilesystemTransport),
         Settings {
             root: File::open(&root).unwrap(),

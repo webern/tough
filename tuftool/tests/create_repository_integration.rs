@@ -156,7 +156,7 @@ fn create_repository(root_key: &str, auto_generate: bool) {
         .success();
 
     // Load our newly created repo
-    let repo = Repository::load(
+    let repo = Repository::load_default(
         Box::new(tough::FilesystemTransport),
         Settings {
             root: File::open(root_json).unwrap(),

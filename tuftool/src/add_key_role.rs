@@ -14,7 +14,7 @@ use structopt::StructOpt;
 use tough::editor::targets::TargetsEditor;
 use tough::http::HttpTransport;
 use tough::key_source::KeySource;
-use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository};
+use tough::{ExpirationEnforcement, FilesystemTransport, Limits, Repository, Settings};
 use url::Url;
 
 #[derive(Debug, StructOpt)]
@@ -56,39 +56,19 @@ pub(crate) struct AddKeyArgs {
 impl AddKeyArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
-        // We don't do anything with targets so we will use metadata url
-        let settings = tough::Settings {
-            root: File::open(&self.root).unwrap(),
-            datastore: None,
-            metadata_base_url: self.metadata_base_url.to_string(),
-            targets_base_url: self.metadata_base_url.to_string(),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        };
-
-        // Load the `Repository` into the `TargetsEditor`
-        // Loading a `Repository` with different `Transport`s results in
-        // different types. This is why we can't assign the `Repository`
-        // to a variable with the if statement.
-        if self.metadata_base_url.scheme() == "file" {
-            let repository = Repository::load(Box::new(FilesystemTransport), settings)
-                .context(error::RepoLoad)?;
-            self.with_targets_editor(
-                role,
-                TargetsEditor::from_repo(repository, role)
-                    .context(error::EditorFromRepo { path: &self.root })?,
-            )?;
-        } else {
-            let repository = Repository::load(Box::new(HttpTransport::new()), settings)
-                .context(error::RepoLoad)?;
-            self.with_targets_editor(
-                role,
-                TargetsEditor::from_repo(repository, role)
-                    .context(error::EditorFromRepo { path: &self.root })?,
-            )?;
-        }
-
-        Ok(())
+        let repository = Repository::load_default(Settings {
+            root: File::open(&self.root).context(error::OpenRoot { path: &self.root })?,
+            metadata_base_url: &self.metadata_base_url,
+            // We don't do anything with targets
+            targets_base_url: "file://unused/url",
+        })
+        .context(error::RepoLoad)?;
+        // create targets editor
+        self.with_targets_editor(
+            role,
+            TargetsEditor::from_repo(repository, role)
+                .context(error::EditorFromRepo { path: &self.root })?,
+        )
     }
 
     /// Adds keys to a role using targets Editor

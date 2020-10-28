@@ -3,7 +3,7 @@
 
 use std::fs::File;
 use test_utils::{dir_url, read_to_end, test_data};
-use tough::{ExpirationEnforcement, Limits, Repository, Settings};
+use tough::{Repository, Settings};
 
 mod test_utils;
 
@@ -15,17 +15,11 @@ mod test_utils;
 fn test_tuf_reference_impl() {
     let base = test_data().join("tuf-reference-impl");
 
-    let repo = Repository::load(
-        Box::new(tough::FilesystemTransport),
-        Settings {
-            root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
-            datastore: None,
-            metadata_base_url: dir_url(base.join("metadata")),
-            targets_base_url: dir_url(base.join("targets")),
-            limits: Limits::default(),
-            expiration_enforcement: ExpirationEnforcement::Safe,
-        },
-    )
+    let repo = Repository::load_default(Settings {
+        root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
+        metadata_base_url: dir_url(base.join("metadata")),
+        targets_base_url: dir_url(base.join("targets")),
+    })
     .unwrap();
 
     assert_eq!(
