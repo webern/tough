@@ -13,7 +13,7 @@ pub(crate) fn fetch_max_size(
     url: Url,
     max_size: u64,
     specifier: &'static str,
-) -> Result<impl Read> {
+) -> Result<impl Read + Send> {
     Ok(MaxSizeAdapter::new(
         transport
             .fetch(url.clone())
@@ -29,7 +29,7 @@ pub(crate) fn fetch_sha256(
     size: u64,
     specifier: &'static str,
     sha256: &[u8],
-) -> Result<impl Read> {
+) -> Result<impl Read + Send> {
     Ok(DigestAdapter::sha256(
         Box::new(MaxSizeAdapter::new(
             transport
