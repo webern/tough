@@ -90,15 +90,15 @@ impl AddRoleArgs {
         let repository = load_metadata_repo(&self.root, &self.metadata_base_url)?;
         // if sign_all use Repository Editor to sign the entire repo if not use targets editor
         if self.sign_all {
-            // Load the `Repository` into the `RepositoryEditor`
+            // Add a role using a `RepositoryEditor`
             self.with_repo_editor(
                 role,
                 RepositoryEditor::from_repo(&self.root, repository)
                     .context(error::EditorFromRepo { path: &self.root })?,
             )
         } else {
-            // Load the `Repository` into the `TargetsEditor`
-            self.with_targets_editor(
+            // Add a role using a `TargetsEditor`
+            self.add_role(
                 role,
                 TargetsEditor::from_repo(repository, role)
                     .context(error::EditorFromRepo { path: &self.root })?,
@@ -108,7 +108,7 @@ impl AddRoleArgs {
 
     #[allow(clippy::option_if_let_else)]
     /// Adds a role to metadata using targets Editor
-    fn with_targets_editor(&self, role: &str, mut editor: TargetsEditor) -> Result<()> {
+    fn add_role(&self, role: &str, mut editor: TargetsEditor) -> Result<()> {
         let paths = if let Some(paths) = &self.paths {
             PathSet::Paths(paths.clone())
         } else if let Some(path_hash_prefixes) = &self.path_hash_prefixes {

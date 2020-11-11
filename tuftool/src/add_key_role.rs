@@ -55,8 +55,7 @@ impl AddKeyArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         // load the repo
         let repository = load_metadata_repo(&self.root, &self.metadata_base_url)?;
-        // create targets editor
-        self.with_targets_editor(
+        self.add_key(
             role,
             TargetsEditor::from_repo(repository, role)
                 .context(error::EditorFromRepo { path: &self.root })?,
@@ -64,7 +63,7 @@ impl AddKeyArgs {
     }
 
     /// Adds keys to a role using targets Editor
-    fn with_targets_editor(&self, role: &str, mut editor: TargetsEditor) -> Result<()> {
+    fn add_key(&self, role: &str, mut editor: TargetsEditor) -> Result<()> {
         // create the keypairs to add
         let mut key_pairs = HashMap::new();
         for source in &self.new_keys {

@@ -54,7 +54,7 @@ pub(crate) struct RemoveKeyArgs {
 impl RemoveKeyArgs {
     pub(crate) fn run(&self, role: &str) -> Result<()> {
         let repository = load_metadata_repo(&self.root, &self.metadata_base_url)?;
-        self.remove_key_with_targets_editor(
+        self.remove_key(
             role,
             TargetsEditor::from_repo(repository, role)
                 .context(error::EditorFromRepo { path: &self.root })?,
@@ -62,7 +62,7 @@ impl RemoveKeyArgs {
     }
 
     /// Removes keys from a delegated role using targets Editor
-    fn remove_key_with_targets_editor(&self, role: &str, mut editor: TargetsEditor) -> Result<()> {
+    fn remove_key(&self, role: &str, mut editor: TargetsEditor) -> Result<()> {
         let updated_role = editor
             .remove_key(
                 &self.remove,
