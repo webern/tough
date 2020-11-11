@@ -294,28 +294,19 @@ fn parse_response_code(response: reqwest::blocking::Response) -> HttpResult {
                 trace!("error is fatal (no status): {}", err);
                 HttpResult::Fatal(err)
             }
-            Some(status) => parse_status_err(err, status),
-        },
-    }
-}
-
-/// Categorizes the the error type based on its HTTP code.
-fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpResult {
-    if status.is_server_error() {
-        trace!("error is retryable: {}", err);
-        HttpResult::Retryable(err)
-    } else {
-        match status.as_u16() {
-            // some services (like S3) return a 403 when the file is not found
-            403 | 404 => {
+            Some(status) if status.is_server_error() => {
+                trace!("error is retryable: {}", err);
+                HttpResult::Retryable(err)
+            }
+            Some(status) if matches!(status.as_u16(), 403 | 404) => {
                 trace!("error is file not found: {}", err);
                 HttpResult::FileNotFound(err)
             }
-            _ => {
+            Some(_) => {
                 trace!("error is fatal (status): {}", err);
                 HttpResult::Fatal(err)
             }
-        }
+        },
     }
 }
 
