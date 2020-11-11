@@ -1,6 +1,6 @@
 use dyn_clone::DynClone;
-use serde::export::Formatter;
-use std::fmt::{Debug, Display};
+use snafu::Snafu;
+use std::fmt::Debug;
 use std::io::{ErrorKind, Read};
 use url::Url;
 
@@ -43,7 +43,8 @@ pub enum TransportErrorKind {
 }
 
 /// The error type that [`Transport`] `fetch` returns.
-#[derive(Debug)]
+#[derive(Debug, Snafu)]
+#[snafu(visibility = "pub")]
 pub struct TransportError {
     /// The kind of error that occurred.
     pub kind: TransportErrorKind,
@@ -73,25 +74,6 @@ impl TransportError {
             TransportErrorKind::UnsupportedUrlScheme,
             url,
             "Transport cannot handle the given URL scheme.".to_string(),
-        )
-    }
-}
-
-/// [`TransportError`] implements the standard error interface.
-impl std::error::Error for TransportError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        let x: &(dyn std::error::Error + 'static) = self.source.as_ref();
-        Some(x)
-    }
-}
-
-/// [`TransportError`] implements display, part of the standard error interface.
-impl Display for TransportError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Transport error '{:?}' for '{}', source: {}",
-            self.kind, self.url, self.source
         )
     }
 }
