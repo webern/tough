@@ -16,7 +16,7 @@ mod test_utils;
 fn test_tuf_reference_impl() {
     let base = test_data().join("tuf-reference-impl");
 
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
         metadata_base_url: dir_url(base.join("metadata")),
         targets_base_url: dir_url(base.join("targets")),
@@ -62,7 +62,7 @@ fn test_tuf_reference_impl_default_transport() {
     let base = test_data().join("tuf-reference-impl");
     let datastore = TempDir::new().unwrap();
 
-    let repo = Repository::load(
+    let repo = Repository::load_with_options(
         Settings {
             root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
             metadata_base_url: dir_url(base.join("metadata")),

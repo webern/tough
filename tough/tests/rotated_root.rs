@@ -11,7 +11,7 @@ use tough::{Repository, Settings};
 fn rotated_root() {
     let base = test_data().join("rotated-root");
 
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(base.join("1.root.json")).unwrap(),
         metadata_base_url: dir_url(&base),
         targets_base_url: dir_url(base.join("targets")),

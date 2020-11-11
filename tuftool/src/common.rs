@@ -22,7 +22,7 @@ where
     S: AsRef<str>,
 {
     let root = root.as_ref();
-    Repository::load_default(Settings {
+    Repository::load(Settings {
         root: File::open(root).context(error::OpenRoot { path: root })?,
         metadata_base_url: metdata_url.as_ref(),
         // we don't do anything with the targets url for metadata operations

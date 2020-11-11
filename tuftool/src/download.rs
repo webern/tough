@@ -99,7 +99,7 @@ impl DownloadArgs {
         };
 
         // load repository
-        let repository = Repository::load(
+        let repository = Repository::load_with_options(
             Settings {
                 root: File::open(&root_path).context(error::OpenRoot { path: &root_path })?,
                 metadata_base_url: &self.metadata_base_url,

@@ -56,7 +56,7 @@ fn create_command() {
         .success();
 
     // Load our newly created repo
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(repo_dir.path().join("metadata")),
         targets_base_url: dir_url(repo_dir.path().join("targets")),

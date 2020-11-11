@@ -232,14 +232,14 @@ pub struct Repository {
 
 impl Repository {
     /// Load and verify TUF repository metadata with default [`Options`]. See
-    /// [`Repository::load`] for more into.
-    pub fn load_default<R, S1, S2>(settings: Settings<R, S1, S2>) -> Result<Self>
+    /// [`Repository::load_with_options`] for more into.
+    pub fn load<R, S1, S2>(settings: Settings<R, S1, S2>) -> Result<Self>
     where
         R: Read,
         S1: AsRef<str>,
         S2: AsRef<str>,
     {
-        Self::load(settings, Options::default())
+        Self::load_with_options(settings, Options::default())
     }
 
     /// Load and verify TUF repository metadata.
@@ -251,7 +251,10 @@ impl Repository {
     ///
     /// `metadata_base_url` and `targets_base_url` are the HTTP(S) base URLs for where the client
     /// can find metadata (such as root.json) and targets (as listed in targets.json).
-    pub fn load<R, S1, S2>(settings: Settings<R, S1, S2>, options: Options) -> Result<Self>
+    pub fn load_with_options<R, S1, S2>(
+        settings: Settings<R, S1, S2>,
+        options: Options,
+    ) -> Result<Self>
     where
         R: Read,
         S1: AsRef<str>,

@@ -15,7 +15,7 @@ mod test_utils;
 fn test_expiration_enforcement_safe() {
     let base = test_data().join("expired-repository");
 
-    let result = Repository::load_default(Settings {
+    let result = Repository::load(Settings {
         root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
         metadata_base_url: dir_url(base.join("metadata")),
         targets_base_url: dir_url(base.join("targets")),
@@ -42,7 +42,7 @@ fn test_expiration_enforcement_safe() {
 #[test]
 fn test_expiration_enforcement_unsafe() {
     let base = test_data().join("expired-repository");
-    let result = Repository::load(
+    let result = Repository::load_with_options(
         Settings {
             root: File::open(base.join("metadata").join("1.root.json")).unwrap(),
             metadata_base_url: dir_url(base.join("metadata")),

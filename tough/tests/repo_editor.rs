@@ -65,7 +65,7 @@ fn targets_path() -> PathBuf {
 }
 
 fn load_tuf_reference_impl(paths: &mut RepoPaths) -> Repository {
-    Repository::load_default(Settings {
+    Repository::load(Settings {
         root: paths.root(),
         metadata_base_url: &paths.metadata_base_url,
         targets_base_url: &paths.targets_base_url,
@@ -228,7 +228,7 @@ fn create_sign_write_reload_repo() {
         .link_targets(&targets_path(), &targets_destination, PathExists::Skip)
         .is_ok());
     // Load the repo we just created
-    let _new_repo = Repository::load_default(Settings {
+    let _new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -273,7 +273,7 @@ fn create_role_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -323,7 +323,7 @@ fn create_role_flow() {
     // reload repo and verify that A role is included
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -346,7 +346,7 @@ fn create_role_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -384,7 +384,7 @@ fn create_role_flow() {
     // reload repo and add in A and B metadata and update snapshot
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -418,7 +418,7 @@ fn create_role_flow() {
 
     // reload repo and verify that A and B role are included
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -468,7 +468,7 @@ fn update_targets_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -518,7 +518,7 @@ fn update_targets_flow() {
     // reload repo and verify that A role is included
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -541,7 +541,7 @@ fn update_targets_flow() {
 
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -579,7 +579,7 @@ fn update_targets_flow() {
     // reload repo and add in A and B metadata and update snapshot
     // reload repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -613,7 +613,7 @@ fn update_targets_flow() {
 
     // reload repo and verify that A and B role are included
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -655,7 +655,7 @@ fn update_targets_flow() {
     // Add in edited A targets and update snapshot (update-repo)
     // load repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -691,7 +691,7 @@ fn update_targets_flow() {
 
     //load the updated repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -738,7 +738,7 @@ fn update_targets_flow() {
     // Add in edited A targets and update snapshot (update-repo)
     // load repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),
@@ -775,7 +775,7 @@ fn update_targets_flow() {
 
     //load the updated repo
     let root = root_path();
-    let new_repo = Repository::load_default(Settings {
+    let new_repo = Repository::load(Settings {
         root: File::open(&root).unwrap(),
         metadata_base_url: dir_url(&metadata_destination),
         targets_base_url: dir_url(&targets_destination),

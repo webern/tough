@@ -105,7 +105,7 @@ fn update_command_without_new_targets() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),
@@ -178,7 +178,7 @@ fn update_command_with_new_targets() {
         .success();
 
     // Load the updated repo.
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),
@@ -364,7 +364,7 @@ fn update_command_expired_repo_allow() {
     update_expected.0.success();
     // Load the updated repo
     let root_json = test_utils::test_data().join("simple-rsa").join("root.json");
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(outdir.path().join("metadata")),
         targets_base_url: dir_url(outdir.path().join("targets")),

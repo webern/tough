@@ -143,7 +143,7 @@ fn create_add_role_command() {
     // Load the updated repo
     let updated_metadata_base_url = &dir_url(new_repo_dir.path().join("metadata"));
     let updated_targets_base_url = &dir_url(new_repo_dir.path().join("targets"));
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(&root_json).unwrap(),
         metadata_base_url: updated_metadata_base_url.clone(),
         targets_base_url: updated_targets_base_url.clone(),
@@ -242,7 +242,7 @@ fn create_add_role_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),
@@ -412,7 +412,7 @@ fn update_target_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),
@@ -664,7 +664,7 @@ fn add_key_command() {
         .success();
 
     // Load the updated repo
-    let _repo = Repository::load_default(Settings {
+    let _repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),
@@ -960,7 +960,7 @@ fn remove_role_command() {
     // Load the updated repo
     let updated_metadata_base_url = dir_url(new_repo_dir.path().join("metadata"));
     let updated_targets_base_url = dir_url(new_repo_dir.path().join("targets"));
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(&root_json).unwrap(),
         metadata_base_url: updated_metadata_base_url.clone(),
         targets_base_url: updated_targets_base_url,
@@ -1138,7 +1138,7 @@ fn remove_role_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),
@@ -1232,7 +1232,7 @@ fn remove_role_recursive_command() {
 
     // Load the updated repo
     let updated_metadata_base_url = &dir_url(new_repo_dir.path().join("metadata"));
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(&root_json).unwrap(),
         metadata_base_url: updated_metadata_base_url.clone(),
         targets_base_url: dir_url(new_repo_dir.path().join("targets")),
@@ -1411,7 +1411,7 @@ fn remove_role_recursive_command() {
         .success();
 
     // Load the updated repo
-    let repo = Repository::load_default(Settings {
+    let repo = Repository::load(Settings {
         root: File::open(root_json).unwrap(),
         metadata_base_url: dir_url(update_out.path().join("metadata")),
         targets_base_url: dir_url(update_out.path().join("targets")),

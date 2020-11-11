@@ -107,7 +107,7 @@ WARNING: `--allow-expired-repo` was passed; this is unsafe and will not establis
 
 impl UpdateArgs {
     pub(crate) fn run(&self) -> Result<()> {
-        let repository = Repository::load(
+        let repository = Repository::load_with_options(
             Settings {
                 root: File::open(&self.root).context(error::OpenRoot { path: &self.root })?,
                 metadata_base_url: &self.metadata_base_url,
