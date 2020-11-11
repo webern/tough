@@ -398,7 +398,7 @@ mod http_error {
             HttpError::FetchFileNotFound { .. } => {
                 TransportError::new(TransportErrorKind::FileNotFound, url, e)
             }
-            _ => TransportError::new(TransportErrorKind::Failure, url, e),
+            _ => TransportError::new(TransportErrorKind::Other, url, e),
         }
     }
 }

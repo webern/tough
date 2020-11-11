@@ -39,7 +39,7 @@ pub enum TransportErrorKind {
     /// The file cannot be found.
     FileNotFound,
     /// The transport failed for any other reason, e.g. IO error, HTTP broken pipe, etc.
-    Failure,
+    Other,
 }
 
 /// The error type that [`Transport`] `fetch` returns.
@@ -63,13 +63,13 @@ impl TransportError {
     {
         Self {
             kind,
-            url: url.as_ref().to_owned(),
+            url: url.as_ref().into(),
             source: source_error.into(),
         }
     }
 
     /// Creates a [`TransportError`] for reporting an unhandled URL type.
-    pub fn unsupported_url<S: AsRef<str>>(url: S) -> Self {
+    pub fn unsupported_scheme<S: AsRef<str>>(url: S) -> Self {
         TransportError::new(
             TransportErrorKind::UnsupportedUrlScheme,
             url,
@@ -87,13 +87,13 @@ pub struct FilesystemTransport;
 impl Transport for FilesystemTransport {
     fn fetch(&self, url: Url) -> Result<Box<dyn Read + Send>, TransportError> {
         if url.scheme() != "file" {
-            return Err(TransportError::unsupported_url(url));
+            return Err(TransportError::unsupported_scheme(url));
         }
 
         let f = std::fs::File::open(url.path()).map_err(|e| {
             let kind = match e.kind() {
                 ErrorKind::NotFound => TransportErrorKind::FileNotFound,
-                _ => TransportErrorKind::Failure,
+                _ => TransportErrorKind::Other,
             };
             TransportError::new(kind, url, e)
         })?;
