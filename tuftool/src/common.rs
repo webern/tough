@@ -12,6 +12,10 @@ pub(crate) const UNUSED_URL: &str = "file:///unused/url";
 
 /// Load a repo for metadata processing only. Such a repo will never use the
 /// targets directory, so a dummy path is passed.
+///
+/// - `root` must be a path to a file that can be opened with `File::open`.
+/// - `metadata_url` can be local or remote.
+///
 pub(crate) fn load_metadata_repo<P, S>(root: P, metdata_url: S) -> Result<Repository>
 where
     P: AsRef<Path>,
