@@ -222,20 +222,17 @@ fn fetch_with_retries(
             }
             HttpResult::Fatal(err) => {
                 trace!("{:?} - returning fatal error from fetch: {}", r, err);
-                return Err(HttpError::FetchFatal { source: err });
+                return Err(err).context(FetchFatal);
             }
             HttpResult::FileNotFound(err) => {
                 trace!("{:?} - returning file not found from fetch: {}", r, err);
-                return Err(HttpError::FetchFileNotFound { source: err });
+                return Err(err).context(FetchFileNotFound);
             }
             HttpResult::Retryable(err) => {
                 trace!("{:?} - retryable error: {}", r, err);
                 if r.current_try >= cs.tries - 1 {
                     debug!("{:?} - returning failure, no more retries: {}", r, err);
-                    return Err(HttpError::FetchNoMoreRetries {
-                        tries: cs.tries,
-                        source: err,
-                    });
+                    return Err(err).context(FetchNoMoreRetries { tries: cs.tries });
                 }
             }
         }
