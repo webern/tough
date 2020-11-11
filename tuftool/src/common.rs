@@ -1,4 +1,4 @@
-/// This module if for code that is re-used by different `tuftool` subcommands.
+/// This module is for code that is re-used by different `tuftool` subcommands.
 use crate::error::{self, Result};
 use snafu::ResultExt;
 use std::fs::File;
