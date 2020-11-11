@@ -1,11 +1,12 @@
 //! The `http` module provides `HttpTransport` which enables `Repository` objects to be
 //! loaded over HTTP
-use crate::{Transport, TransportError};
+use crate::{Transport, TransportError, TransportErrorKind};
 use log::{debug, error, trace};
 use reqwest::blocking::{Client, ClientBuilder, Request, Response};
 use reqwest::header::{self, HeaderValue, ACCEPT_RANGES};
 use reqwest::Method;
 use snafu::ResultExt;
+use snafu::Snafu;
 use std::cmp::Ordering;
 use std::io::Read;
 use std::time::Duration;
@@ -69,7 +70,7 @@ impl Transport for HttpTransport {
         let mut r = RetryState::new(self.settings.initial_backoff);
         Ok(Box::new(
             fetch_with_retries(&mut r, &self.settings, &url)
-                .map_err(|e| http_error::to_transport(url.to_string(), e))?,
+                .map_err(|e| TransportError::from(url.to_string(), e))?,
         ))
     }
 }
@@ -192,14 +193,14 @@ fn fetch_with_retries(
     r: &mut RetryState,
     cs: &ClientSettings,
     url: &Url,
-) -> Result<RetryRead, http_error::HttpError> {
+) -> Result<RetryRead, HttpError> {
     trace!("beginning fetch for '{}'", url);
     // create a reqwest client
     let client = ClientBuilder::new()
         .timeout(cs.timeout)
         .connect_timeout(cs.connect_timeout)
         .build()
-        .context(http_error::Client)?;
+        .context(HttpClient)?;
 
     // retry loop
     loop {
@@ -221,17 +222,17 @@ fn fetch_with_retries(
             }
             HttpResult::Fatal(err) => {
                 trace!("{:?} - returning fatal error from fetch: {}", r, err);
-                return Err(http_error::HttpError::FetchFatal { source: err });
+                return Err(HttpError::FetchFatal { source: err });
             }
             HttpResult::FileNotFound(err) => {
                 trace!("{:?} - returning file not found from fetch: {}", r, err);
-                return Err(http_error::HttpError::FetchFileNotFound { source: err });
+                return Err(HttpError::FetchFileNotFound { source: err });
             }
             HttpResult::Retryable(err) => {
                 trace!("{:?} - retryable error: {}", r, err);
                 if r.current_try >= cs.tries - 1 {
                     debug!("{:?} - returning failure, no more retries: {}", r, err);
-                    return Err(http_error::HttpError::FetchNoMoreRetries {
+                    return Err(HttpError::FetchNoMoreRetries {
                         tries: cs.tries,
                         source: err,
                     });
@@ -319,81 +320,58 @@ fn parse_status_err(err: reqwest::Error, status: reqwest::StatusCode) -> HttpRes
 }
 
 /// Builds a GET request. If `next_byte` is greater than zero, adds a byte range header to the request.
-fn build_request(
-    client: &Client,
-    next_byte: usize,
-    url: &Url,
-) -> Result<Request, http_error::HttpError> {
+fn build_request(client: &Client, next_byte: usize, url: &Url) -> Result<Request, HttpError> {
     if next_byte == 0 {
         let request = client
             .request(Method::GET, url.as_str())
             .build()
-            .context(http_error::RequestBuild)?;
+            .context(RequestBuild)?;
         Ok(request)
     } else {
         let header_value_string = format!("bytes={}-", next_byte);
-        let header_value = HeaderValue::from_str(header_value_string.as_str()).context(
-            http_error::InvalidHeader {
+        let header_value =
+            HeaderValue::from_str(header_value_string.as_str()).context(InvalidHeader {
                 header_value: &header_value_string,
-            },
-        )?;
+            })?;
         let request = client
             .request(Method::GET, url.as_str())
             .header(header::RANGE, header_value)
             .build()
-            .context(http_error::RequestBuild)?;
+            .context(RequestBuild)?;
         Ok(request)
     }
 }
 
-mod http_error {
-    #![allow(clippy::default_trait_access)]
+/// The error type for the HTTP transport module.
+#[derive(Debug, Snafu)]
+#[snafu(visibility = "pub(super)")]
+#[non_exhaustive]
+#[allow(missing_docs)]
+pub enum HttpError {
+    #[snafu(display("A non-retryable error occurred: {}", source))]
+    FetchFatal { source: reqwest::Error },
 
-    use crate::transport::TransportErrorKind;
-    use crate::TransportError;
-    use snafu::Snafu;
-    use std::io::{Error, ErrorKind};
+    #[snafu(display("File not found: {}", source))]
+    FetchFileNotFound { source: reqwest::Error },
 
-    /// The error type for the HTTP transport module.
-    #[derive(Debug, Snafu)]
-    #[snafu(visibility = "pub(super)")]
-    #[non_exhaustive]
-    #[allow(missing_docs)]
-    pub enum HttpError {
-        #[snafu(display("The HTTP client could not be built: {}", source))]
-        Client { source: reqwest::Error },
+    #[snafu(display("Fetch failed after {} retries: {}", tries, source))]
+    FetchNoMoreRetries { tries: u32, source: reqwest::Error },
 
-        #[snafu(display("A non-retryable error occurred: {}", source))]
-        FetchFatal { source: reqwest::Error },
+    #[snafu(display("The HTTP client could not be built: {}", source))]
+    HttpClient { source: reqwest::Error },
 
-        #[snafu(display("File not found: {}", source))]
-        FetchFileNotFound { source: reqwest::Error },
+    #[snafu(display("Invalid header value '{}': {}", header_value, source))]
+    InvalidHeader {
+        header_value: String,
+        source: reqwest::header::InvalidHeaderValue,
+    },
 
-        #[snafu(display("Fetch failed after {} retries: {}", tries, source))]
-        FetchNoMoreRetries { tries: u32, source: reqwest::Error },
+    #[snafu(display("Unable to create HTTP request: {}", source))]
+    RequestBuild { source: reqwest::Error },
+}
 
-        #[snafu(display("Invalid header value '{}': {}", header_value, source))]
-        InvalidHeader {
-            header_value: String,
-            source: reqwest::header::InvalidHeaderValue,
-        },
-
-        #[snafu(display("Unable to create HTTP request: {}", source))]
-        RequestBuild { source: reqwest::Error },
-    }
-
-    impl Into<std::io::Error> for HttpError {
-        fn into(self) -> Error {
-            match self {
-                HttpError::FetchFileNotFound { .. } => {
-                    std::io::Error::new(ErrorKind::NotFound, self)
-                }
-                _ => std::io::Error::new(ErrorKind::Other, self),
-            }
-        }
-    }
-
-    pub(super) fn to_transport(url: String, e: HttpError) -> TransportError {
+impl TransportError {
+    fn from(url: String, e: HttpError) -> Self {
         match e {
             HttpError::FetchFileNotFound { .. } => {
                 TransportError::new(TransportErrorKind::FileNotFound, url, e)
