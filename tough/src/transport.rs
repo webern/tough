@@ -1,4 +1,4 @@
-#[cfg(feature = "http")]
+#[cfg(any(feature = "http-rustls", feature = "http-native-tls", feature = "http-no-tls"))]
 use crate::{ClientSettings, HttpTransport};
 use dyn_clone::DynClone;
 use snafu::Snafu;
@@ -110,7 +110,7 @@ impl Transport for FilesystemTransport {
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultTransport {
     file: FilesystemTransport,
-    #[cfg(feature = "http")]
+    #[cfg(any(feature = "http-rustls", feature = "http-native-tls", feature = "http-no-tls"))]
     http: HttpTransport,
 }
 
@@ -118,7 +118,7 @@ impl Default for DefaultTransport {
     fn default() -> Self {
         Self {
             file: FilesystemTransport,
-            #[cfg(feature = "http")]
+            #[cfg(any(feature = "http-rustls", feature = "http-native-tls", feature = "http-no-tls"))]
             http: HttpTransport::default(),
         }
     }
@@ -131,7 +131,7 @@ impl DefaultTransport {
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(any(feature = "http-rustls", feature = "http-native-tls", feature = "http-no-tls"))]
 impl DefaultTransport {
     /// Create a new `DefaultTransport` using the given HTTP `ClientSettings`.
     pub fn from_http_settings(settings: ClientSettings) -> Self {
@@ -153,7 +153,7 @@ impl Transport for DefaultTransport {
 }
 
 impl DefaultTransport {
-    #[cfg(not(feature = "http"))]
+    #[cfg(all(not(feature = "http-rustls"), not(feature = "http-native-tls"), not(feature = "http-no-tls")))]
     #[allow(clippy::trivially_copy_pass_by_ref, clippy::unused_self)]
     fn handle_http(&self, url: Url) -> Result<Box<dyn Read + Send>, TransportError> {
         Err(TransportError::new(
@@ -163,7 +163,7 @@ impl DefaultTransport {
         ))
     }
 
-    #[cfg(feature = "http")]
+    #[cfg(any(feature = "http-rustls", feature = "http-native-tls", feature = "http-no-tls"))]
     fn handle_http(&self, url: Url) -> Result<Box<dyn Read + Send>, TransportError> {
         self.http.fetch(url)
     }

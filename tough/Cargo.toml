@@ -8,6 +8,15 @@ repository = "https://github.com/awslabs/tough"
 keywords = ["tuf", "update", "repository"]
 edition = "2018"
 
+[features]
+default = []
+http-rustls = ["reqwest", "reqwest/rustls-tls", "reqwest/blocking"]
+http-native-tls = ["reqwest", "reqwest/native-tls", "reqwest/blocking"]
+http-no-tls = ["reqwest", "reqwest/blocking"]
+
+# The `integ` feature enables integration tests. These tests require docker to be running on the host.
+integ = []
+
 [dependencies]
 chrono = { version = "0.4.11", features = ["serde"] }
 dyn-clone = "1.0.3"
@@ -16,7 +25,7 @@ hex = "0.4.2"
 log = "0.4.8"
 olpc-cjson = { version = "0.1.0", path = "../olpc-cjson" }
 pem = "0.8.1"
-reqwest = { version = "0.10.4", optional = true, default-features = false, features = ["blocking"] }
+reqwest = { version = "0.10.4", optional = true, default-features = false }
 ring = { version = "0.16.16", features = ["std"] }
 serde = { version = "1.0.118", features = ["derive"] }
 serde_json = "1.0.60"
@@ -30,9 +39,3 @@ walkdir = "2.2.9"
 [dev-dependencies]
 hex-literal = "0.3.1"
 mockito = "0.28"
-
-[features]
-http = ["reqwest"]
-
-# The `integ` feature enables integration tests. These tests require docker to be running on the host.
-integ = []

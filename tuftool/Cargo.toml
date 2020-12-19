@@ -9,11 +9,16 @@ keywords = ["tuf", "update", "repository"]
 edition = "2018"
 
 [features]
+# integ is used for testing only
 integ = []
-default = ["rusoto"]
+
+# by default, rusoto and reqwest will use rustls
+default = ["rusoto", "rustls"]
+rustls = ["reqwest/rustls-tls", "tough/http-rustls"]
+native-tls = ["reqwest/native-tls", "tough/http-native-tls"]
 rusoto = ["rusoto-rustls"]
 rusoto-native-tls = ["rusoto_core/native-tls", "rusoto_credential", "rusoto_ssm/native-tls", "rusoto_kms/native-tls"]
-rusoto-rustls = ["rusoto_core/rustls", "rusoto_credential", "rusoto_ssm/rustls", "rusoto_kms/rustls",]
+rusoto-rustls = ["rusoto_core/rustls", "rusoto_credential", "rusoto_ssm/rustls", "rusoto_kms/rustls", ]
 
 [dependencies]
 chrono = "0.4.11"
@@ -36,9 +41,9 @@ snafu = { version = "0.6.10", features = ["backtraces-impl-backtrace-crate"] }
 structopt = "0.3"
 tempfile = "3.1.0"
 tokio = "0.2.21"
-tough = { version = "0.9.0", path = "../tough", features = ["http"] }
-tough-ssm = { version = "0.4.0", path = "../tough-ssm" }
-tough-kms = { version = "0.1.1", path = "../tough-kms" }
+tough = { version = "0.9.0", path = "../tough" }
+tough-ssm = { version = "0.4.0", path = "../tough-ssm" } # TODO - the tls choice is not passed?
+tough-kms = { version = "0.1.1", path = "../tough-kms" } # TODO - the tls choice is not passed?
 url = "2.1.0"
 walkdir = "2.2.9"
 
